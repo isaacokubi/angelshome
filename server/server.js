@@ -51,9 +51,13 @@ helmet()
 
 
 app.use(
-cors({
-origin:"http://localhost:5173"
-})
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://angelshome.vercel.app",
+    ],
+    credentials: true,
+  })
 );
 
 
