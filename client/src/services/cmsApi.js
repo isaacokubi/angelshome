@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000/api/cms";
+const API_URL = "https://angelshome-1.onrender.com/api/cms";
 
 function getToken() {
   return localStorage.getItem("adminToken");

@@ -42,7 +42,7 @@ export default function AdminDashboard() {
         const response =
             await fetch(
 
-                "http://localhost:5000/api/admin/dashboard",
+                "https://angelshome-1.onrender.com/api/admin/dashboard",
 
                 {
 

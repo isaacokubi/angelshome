@@ -33,7 +33,7 @@ export default function AdminLogin() {
             const response =
                 await fetch(
 
-                    "http://localhost:5000/api/admin/login",
+                    "https://angelshome-1.onrender.com/api/admin/login",
 
                     {
 

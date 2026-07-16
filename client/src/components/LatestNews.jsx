@@ -11,7 +11,7 @@ export default function LatestNews() {
     useEffect(() => {
 
         fetch(
-            "http://localhost:5000/api/admin/announcements"
+            "https://angelshome-1.onrender.com/api/admin/announcements"
         )
         .then(res => res.json())
         .then(data => setNews(data))

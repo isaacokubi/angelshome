@@ -27,7 +27,7 @@ export default function ContactForm() {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/contact",
+        "https://angelshome-1.onrender.com/api/contact",
         {
           method: "POST",
           headers: {
