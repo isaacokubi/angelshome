@@ -32,7 +32,7 @@ export default function AnnouncementForm() {
         const response =
             await fetch(
 
-                "http://localhost:5000/api/admin/announcement",
+                "https://angelshome-1.onrender.com/api/admin/announcement",
 
                 {
 

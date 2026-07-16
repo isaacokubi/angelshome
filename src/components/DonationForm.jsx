@@ -9,7 +9,7 @@ export default function DonationForm() {
   // PayPal Payment
   async function paypalPayment() {
     const response = await fetch(
-      "http://localhost:5000/api/paypal/create-order",
+      "https://angelshome-1.onrender.com/api/paypal/create-order",
       {
         method: "POST",
         headers: {
@@ -34,7 +34,7 @@ export default function DonationForm() {
   // M-Pesa STK Push
   async function mpesaPayment() {
     const response = await fetch(
-      "http://localhost:5000/api/mpesa/stkpush",
+      "https://angelshome-1.onrender.com/api/mpesa/stkpush",
       {
         method: "POST",
         headers: {
@@ -62,7 +62,7 @@ export default function DonationForm() {
   // Save Donation Record
   async function saveDonation() {
     const response = await fetch(
-      "http://localhost:5000/api/donations",
+      "https://angelshome-1.onrender.com/api/donations",
       {
         method: "POST",
         headers: {
