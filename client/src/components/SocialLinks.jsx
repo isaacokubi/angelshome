@@ -11,7 +11,7 @@ export default function SocialLinks() {
       </a>
 
       <a
-        href="https://x.com/josephatAndula"
+        href="https://x.com/josphatAndula"
         target="_blank"
         rel="noopener noreferrer"
         className="bg-black text-white px-5 py-3 rounded-lg"
