@@ -9,6 +9,8 @@ export default function ContactForm() {
   });
 
   const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+
 
   function handleChange(e) {
     setForm({
@@ -16,6 +18,7 @@ export default function ContactForm() {
       [e.target.name]: e.target.value,
     });
   }
+
 
   async function submitForm(e) {
     e.preventDefault();
@@ -25,21 +28,40 @@ export default function ContactForm() {
       return;
     }
 
+
     try {
+      setLoading(true);
+      setStatus("");
+
+
       const response = await fetch(
         "https://angelshome-1.onrender.com/api/contact",
         {
           method: "POST",
+
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify(form),
         }
       );
 
+
       const data = await response.json();
 
-      setStatus(data.message);
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Message failed to send"
+        );
+      }
+
+
+      setStatus(
+        "Message sent successfully. We will get back to you soon."
+      );
+
 
       setForm({
         name: "",
@@ -47,19 +69,32 @@ export default function ContactForm() {
         phone: "",
         message: "",
       });
+
+
     } catch (error) {
-      setStatus("Unable to send message.");
+
+      setStatus(
+        "Unable to send message. Please try again."
+      );
+
+    } finally {
+
+      setLoading(false);
+
     }
   }
+
 
   return (
     <form
       onSubmit={submitForm}
       className="bg-white rounded-xl shadow-xl p-8"
     >
+
       <h2 className="text-3xl font-bold text-blue-900">
         Send Us A Message
       </h2>
+
 
       <label className="block mt-6 font-semibold">
         Full Name *
@@ -71,7 +106,10 @@ export default function ContactForm() {
         onChange={handleChange}
         className="w-full border p-3 rounded mt-2"
         placeholder="Your name"
+        required
       />
+
+
 
       <label className="block mt-6 font-semibold">
         Email Address *
@@ -84,7 +122,10 @@ export default function ContactForm() {
         onChange={handleChange}
         className="w-full border p-3 rounded mt-2"
         placeholder="example@email.com"
+        required
       />
+
+
 
       <label className="block mt-6 font-semibold">
         Phone Number
@@ -98,9 +139,12 @@ export default function ContactForm() {
         placeholder="07XXXXXXXX"
       />
 
+
+
       <label className="block mt-6 font-semibold">
         Message *
       </label>
+
 
       <textarea
         name="message"
@@ -109,20 +153,39 @@ export default function ContactForm() {
         rows="5"
         className="w-full border p-3 rounded mt-2"
         placeholder="Write your message..."
+        required
       />
+
+
 
       <button
         type="submit"
-        className="mt-8 bg-blue-900 text-white px-8 py-4 rounded-lg hover:bg-blue-800"
+        disabled={loading}
+        className={`mt-8 px-8 py-4 rounded-lg text-white ${
+          loading
+            ? "bg-gray-500 cursor-not-allowed"
+            : "bg-blue-900 hover:bg-blue-800"
+        }`}
       >
-        Send Message
+
+        {loading ? "Sending..." : "Send Message"}
+
       </button>
 
+
+
       {status && (
-        <p className="mt-5 text-green-700 font-semibold">
+        <p
+          className={`mt-5 font-semibold ${
+            status.includes("successfully")
+              ? "text-green-700"
+              : "text-red-600"
+          }`}
+        >
           {status}
         </p>
       )}
+
     </form>
   );
 }
