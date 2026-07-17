@@ -192,24 +192,26 @@ text-blue-900
       </section>
 
       {/* Google Map */}
-      <section
-        className="
-h-[300px]
-sm:h-[400px]
-lg:h-[450px]
-"
-      >
-        <iframe
-          title="school location"
-          className="
-w-full
-h-full
-border-0
-"
-          src="https://maps.google.com/maps?q=Nairobi%20Kenya&t=&z=13&ie=UTF8&iwloc=&output=embed"
-          loading="lazy"
-        ></iframe>
-      </section>
+     <section
+  className="
+    h-[300px]
+    sm:h-[400px]
+    lg:h-[450px]
+  "
+>
+  <iframe
+    title="school location"
+    className="
+      w-full
+      h-full
+      border-0
+    "
+    src="https://www.google.com/maps?q=-1.2635235,36.8578211&hl=en&z=17&output=embed"
+    loading="lazy"
+    allowFullScreen
+    referrerPolicy="no-referrer-when-downgrade"
+  ></iframe>
+</section>
     </div>
   );
 }
