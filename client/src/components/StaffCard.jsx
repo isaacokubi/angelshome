@@ -10,12 +10,12 @@ export default function StaffCard({
         <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition duration-300">
 
             {/* Image container */}
-            <div className="w-full h-80 bg-gray-100 overflow-hidden">
+            <div className="w-full h-96 bg-gray-100 flex items-center justify-center">
 
                 <img
                     src={image}
                     alt={name}
-                    className="w-full h-full object-cover object-top"
+                    className="w-full h-full object-contain"
                     loading="lazy"
                 />
 
