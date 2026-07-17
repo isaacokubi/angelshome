@@ -13,7 +13,7 @@ import AdminLogin from "./pages/AdminLogin";
 
 import AdminDashboard from "./pages/AdminDashboard";
 
-import AdminRoute from "./components/AdminRoute";
+// import AdminRoute from "./components/AdminRoute";
 
 import Donations from "./pages/Donations";
 
@@ -45,11 +45,11 @@ function App() {
 
                     element={
 
-                        <AdminRoute>
+                    //    <AdminRoute>
 
                             <AdminDashboard />
 
-                        </AdminRoute>
+                     //   </AdminRoute>
 
                     }
 

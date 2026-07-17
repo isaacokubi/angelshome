@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 
 export default function ProgressBar() {
 
-  const goal = 500000;
-  const raised = 54500;
+  const goal = 18500000;
+  const raised = 0;
 
 
   const percentage = Math.floor(

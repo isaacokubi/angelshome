@@ -1,22 +1,10 @@
 const donations=[
 
-{
-name:"Anonymous",
-amount:"KES 10,000",
-project:"Library Development"
-},
-
-
-{
-name:"John Family",
-amount:"KES 5,000",
-project:"Scholarship Fund"
-},
 
 
 {
 name:"Community Support Group",
-amount:"KES 25,000",
+amount:"KES 5,000",
 project:"Sports Equipment"
 }
 

@@ -1,7 +1,7 @@
 const timeline = [
 
     {
-        year:"2012",
+        year:"2008",
         title:"School Founded",
         description:"Angels Home Education Center officially opened its doors."
     },
@@ -12,11 +12,7 @@ const timeline = [
         description:"Achieved our first county top-performing students."
     },
 
-    {
-        year:"2018",
-        title:"Modern Computer Lab",
-        description:"Construction of a fully equipped ICT laboratory."
-    },
+
 
     {
         year:"2021",

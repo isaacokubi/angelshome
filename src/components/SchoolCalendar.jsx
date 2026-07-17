@@ -4,22 +4,14 @@ import { useState } from "react";
 const events = [
 
     {
-        date: "15 August 2026",
-        title: "Term Opening Day"
+        date: "25 Jul 2026",
+        title: "Closing  term exams"
     },
 
-    {
-        date: "10 September 2026",
-        title: "Mid-Term Examination"
-    },
+  
 
     {
-        date: "25 October 2026",
-        title: "Sports Day"
-    },
-
-    {
-        date: "5 December 2026",
+        date: "31 Jul 2026",
         title: "Closing Day"
     }
 

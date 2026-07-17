@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 const slides = [
   {
     image: "/images/slide1.jpg",
-    title: "Welcome to Angels Home Education Center",
+    title: "Welcome to Angels Home Education Centre",
     subtitle: "Providing Quality Education for Every Child",
   },
   {
@@ -13,7 +13,7 @@ const slides = [
     subtitle: "Academic Excellence • Discipline • Integrity",
   },
   {
-    image: "/images/banner3.jpg",
+    image: "/images/secondary.jpg",
     title: "Support Our Mission",
     subtitle: "Every Donation Changes a Child's Future",
   },
