@@ -34,7 +34,7 @@ export default function Footer() {
                         font-bold
                     "
                 >
-                    Angels Home Education Center
+                    Angels Home Education Centre
                 </h2>
 
 

@@ -40,7 +40,7 @@ font-bold
 leading-tight
 "
 >
-About Angels Home Education Center
+About Angels Home Education Centre
 </h1>
 
 
@@ -214,10 +214,7 @@ Mission
 
 <p className="mt-4 text-gray-700 leading-7">
 
-To provide quality,
-inclusive and affordable education
-that develops responsible citizens.
-
+ To provide Christ-centered, quality education and holistic care to orphans and vulnerable children.
 </p>
 
 
@@ -251,9 +248,7 @@ Vision
 
 <p className="mt-4 text-gray-700 leading-7">
 
-To become a centre of excellence
-in holistic education.
-
+ To raise God-fearing leaders from the slums who will transform Kenya.
 </p>
 
 
@@ -347,7 +342,7 @@ mb-8
 sm:mb-12
 "
 >
-School Administration
+School & Orphanage Board of Directors
 </h2>
 
 
@@ -365,27 +360,107 @@ sm:gap-10
 
 
 <StaffCard
-image="/images/principal.jpg"
-name="Mrs Jane Wanjiku"
-position="Principal"
+image="/images/director1.jpg"
+name="Rev Josephat Andula Okama"
+position="Director"
 description="Experienced education leader committed to academic excellence."
 />
 
 
 <StaffCard
-image="/images/deputy.jpg"
-name="Mr Peter Mwangi"
-position="Deputy Principal"
-description="Coordinates curriculum implementation and student welfare."
+image="/images/"
+name="Missionary Martha"
+position="Board member"
+description="Coordinates orphanage and student welfare."
 />
 
 
 <StaffCard
-image="/images/bursar.jpg"
-name="Mrs Grace Njeri"
-position="School Bursar"
-description="Responsible for finance and administration."
+image="/images/"
+name="Missionary Mary"
+position="Board member"
+description="Coordinates orphanage and student welfare."
 />
+
+
+<StaffCard
+image="/images/mwalimu.jpg"
+name="Pastor Stephen Olumula"
+position="Board member"
+description="Incharge of home and school infrastructure."
+/>
+
+
+</div>
+
+
+</section>
+
+
+<section
+className="
+max-w-7xl
+mx-auto
+py-12
+sm:py-16
+lg:py-20
+px-4
+sm:px-6
+lg:px-8
+"
+>
+
+
+<h2
+className="
+text-2xl
+sm:text-3xl
+lg:text-4xl
+font-bold
+mb-8
+sm:mb-12
+"
+>
+School Staff
+</h2>
+
+
+
+<div
+className="
+grid
+grid-cols-1
+sm:grid-cols-2
+lg:grid-cols-3
+gap-6
+sm:gap-10
+"
+>
+
+
+<StaffCard
+image="/images/nicholus.png"
+name="Mr Nicholus Maleba"
+position="Teacher"
+description="A committed and focused scholar ."
+/>
+
+
+<StaffCard
+image="/images/"
+name="Mr Wilberforce Ouma"
+position="Teacher"
+description="A devoted teacher and a talented instrumentalist for the church."
+/>
+
+
+<StaffCard
+image="/images/"
+name="Mr Gabriel Odhiambo"
+position="Teacher"
+description="A consistent and loyal worker."
+/>
+
 
 
 </div>

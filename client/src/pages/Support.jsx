@@ -135,9 +135,9 @@ icon="🏫"
 
 title="Infrastructure"
 
-description="Classrooms, laboratories and learning facilities."
+description="Classrooms, orphanage,laboratories and learning facilities."
 
-amount="KES 5,000,000"
+amount="KES 18,500,000"
 
 />
 

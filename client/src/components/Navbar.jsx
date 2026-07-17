@@ -14,7 +14,7 @@ export default function Navbar() {
 
                     {/* Logo */}
                     <h1 className="font-bold text-xl sm:text-2xl">
-                        Angels Home Education Center
+                        Angels Home Education Centre
                     </h1>
 
 

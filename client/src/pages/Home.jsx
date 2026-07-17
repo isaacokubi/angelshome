@@ -54,7 +54,7 @@ export default function Home() {
           "
         >
 
-          Welcome to Angels Home Education Center.
+          Welcome to Angels Home Education Centre.
 
           <br />
 
