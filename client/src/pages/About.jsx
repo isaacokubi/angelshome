@@ -384,7 +384,7 @@ description="Coordinates orphanage and student welfare."
 
 
 <StaffCard
-image="/images/mwalimu.jpg"
+image="/images/"
 name="Pastor Stephen Olumula"
 position="Board member"
 description="Incharge of home and school infrastructure."
