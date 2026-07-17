@@ -397,6 +397,7 @@ description="Incharge of home and school infrastructure."
 </section>
 
 
+
 <section
 className="
 max-w-7xl
@@ -447,7 +448,7 @@ description="A committed and focused scholar ."
 
 
 <StaffCard
-image="/images/"
+image="/images/wilbar.png"
 name="Mr Wilberforce Ouma"
 position="Teacher"
 description="A devoted teacher and a talented instrumentalist for the church."
@@ -455,7 +456,7 @@ description="A devoted teacher and a talented instrumentalist for the church."
 
 
 <StaffCard
-image="/images/"
+image="/images/gabby.png"
 name="Mr Gabriel Odhiambo"
 position="Teacher"
 description="A consistent and loyal worker."
