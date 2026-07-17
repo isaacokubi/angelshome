@@ -20,7 +20,7 @@ export default function SocialLinks() {
       </a>
 
       <a
-        href="#"
+        href="https://www.youtube.com/@josephatAndula4781"
         target="_blank"
         rel="noopener noreferrer"
         className="bg-red-600 text-white px-5 py-3 rounded-lg"
