@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "create-admin": "node scripts/adminRegister.js"
+    "create-admin": "node scripts/adminRegister.js",
+    "reset-admin-password": "node scripts/resetAdminPassword.js"
   },
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",
