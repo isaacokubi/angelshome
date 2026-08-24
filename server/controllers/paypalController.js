@@ -8,6 +8,12 @@ function requirePayPalConfig() {
   }
 }
 
+function clientUrl() {
+  const url = process.env.CLIENT_URL;
+  if (!url) throw new Error("CLIENT_URL is not configured");
+  return url.replace(/\/$/, "");
+}
+
 exports.createOrder = async (req, res) => {
   try {
     requirePayPalConfig();
@@ -30,10 +36,18 @@ exports.createOrder = async (req, res) => {
         amount: { currency_code: "USD", value: (numericAmount / usdRate).toFixed(2) },
         description: process.env.PAYPAL_DONATION_DESCRIPTION || "Angels Home Education Center Donation",
       }],
+      application_context: {
+        brand_name: process.env.PAYPAL_BRAND_NAME || "Angels Home Education Center",
+        user_action: "PAY_NOW",
+        return_url: `${clientUrl()}/donations?paypal=success`,
+        cancel_url: `${clientUrl()}/donations?paypal=cancel`,
+      },
     });
 
     const order = await paypalClient.execute(request);
     const orderId = order.result.id;
+    const approvalLink = order.result.links?.find((link) => link.rel === "approve")?.href;
+    if (!approvalLink) throw new Error("PayPal approval link was not returned");
 
     await Donation.create({
       donorName: donorName?.trim() || "Anonymous",
@@ -46,7 +60,7 @@ exports.createOrder = async (req, res) => {
       project: project?.trim() || undefined,
     });
 
-    return res.json({ success: true, orderID: orderId });
+    return res.json({ success: true, orderID: orderId, approvalUrl: approvalLink });
   } catch (error) {
     console.error("PayPal order creation error:", error.response?.details || error.message);
     return res.status(500).json({ success: false, message: "PayPal order creation failed" });
@@ -64,17 +78,10 @@ exports.captureOrder = async (req, res) => {
     const capture = await paypalClient.execute(request);
     const captureStatus = capture.result?.status;
 
-    if (captureStatus === "COMPLETED") {
-      await Donation.findOneAndUpdate(
-        { transactionId: orderID, paymentMethod: "PAYPAL" },
-        { $set: { status: "Completed" } }
-      );
-    } else {
-      await Donation.findOneAndUpdate(
-        { transactionId: orderID, paymentMethod: "PAYPAL" },
-        { $set: { status: "Failed" } }
-      );
-    }
+    await Donation.findOneAndUpdate(
+      { transactionId: orderID, paymentMethod: "PAYPAL" },
+      { $set: { status: captureStatus === "COMPLETED" ? "Completed" : "Failed" } }
+    );
 
     return res.json({ success: captureStatus === "COMPLETED", capture: capture.result });
   } catch (error) {
