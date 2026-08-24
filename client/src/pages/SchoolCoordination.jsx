@@ -9,8 +9,34 @@ export default function SchoolCoordination() {
   const [data, setData] = useState({ parents: [], sponsors: [], pupils: [] });
   const [form, setForm] = useState({ type: "parent", userId: "", pupilId: "" });
   const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
-  const load = async () => { setError(""); try { const result = await apiRequest("/portal/relationships"); setData({ parents: result.parents || [], sponsors: result.sponsors || [], pupils: result.pupils || [] }); } catch (err) { setError(err.message || "Unable to load relationships."); } finally { setLoading(false); } };
-  useEffect(() => { load(); }, []);
+
+  const load = async () => {
+    try {
+      const result = await apiRequest("/portal/relationships");
+      setData({ parents: result.parents || [], sponsors: result.sponsors || [], pupils: result.pupils || [] });
+    } catch (err) {
+      setError(err.message || "Unable to load relationships.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    const loadInitial = async () => {
+      try {
+        const result = await apiRequest("/portal/relationships");
+        if (active) setData({ parents: result.parents || [], sponsors: result.sponsors || [], pupils: result.pupils || [] });
+      } catch (err) {
+        if (active) setError(err.message || "Unable to load relationships.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadInitial();
+    return () => { active = false; };
+  }, []);
+
   const accounts = form.type === "parent" ? data.parents : data.sponsors;
   const submit = async (event) => { event.preventDefault(); setError(""); setSuccess(""); if (!form.userId || !form.pupilId) return setError("Select both an account and a pupil."); setSaving(true); try { await apiRequest("/portal/relationships", { method: "POST", body: JSON.stringify(form) }); setSuccess(`${labels[form.type]} relationship saved successfully.`); setForm({ ...form, userId: "", pupilId: "" }); await load(); } catch (err) { setError(err.message || "Unable to save relationship."); } finally { setSaving(false); } };
   const remove = async (type, userId, pupilId) => { if (!window.confirm("Remove this relationship? The account will no longer see this pupil's portal information.")) return; setError(""); setSuccess(""); try { await apiRequest("/portal/relationships", { method: "DELETE", body: JSON.stringify({ type, userId, pupilId }) }); setSuccess("Relationship removed."); await load(); } catch (err) { setError(err.message || "Unable to remove relationship."); } };

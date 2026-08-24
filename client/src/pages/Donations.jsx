@@ -6,15 +6,12 @@ import { apiRequest } from "../services/api";
 export default function Donations() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [paymentMessage, setPaymentMessage] = useState("");
+  const paymentStatus = searchParams.get("paypal");
+  const orderID = searchParams.get("token");
+  const cancelled = paymentStatus === "cancel";
 
   useEffect(() => {
-    const paymentStatus = searchParams.get("paypal");
-    const orderID = searchParams.get("token");
-
-    if (paymentStatus !== "success" || !orderID) {
-      if (paymentStatus === "cancel") setPaymentMessage("PayPal payment was cancelled.");
-      return;
-    }
+    if (paymentStatus !== "success" || !orderID) return undefined;
 
     let active = true;
     (async () => {
@@ -36,13 +33,13 @@ export default function Donations() {
     return () => {
       active = false;
     };
-  }, [searchParams, setSearchParams]);
+  }, [paymentStatus, orderID, setSearchParams]);
 
   return (
     <div className="max-w-4xl mx-auto py-16 px-6">
-      {paymentMessage && (
+      {(paymentMessage || cancelled) && (
         <div className="mb-6 rounded-lg bg-white shadow p-4 text-blue-900" role="status">
-          {paymentMessage}
+          {paymentMessage || "PayPal payment was cancelled."}
         </div>
       )}
       <DonationForm />

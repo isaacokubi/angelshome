@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 export default function PrivateGate({ children }) {
   const [inputCode, setInputCode] = useState("");
@@ -8,10 +8,12 @@ export default function PrivateGate({ children }) {
 
   const handleVerify = (e) => {
     e.preventDefault();
-    // Reads from Vercel environment variables
-    const secureCode =
-      import.meta.env.VITE_SITE_ACCESS_CODE ||
-      process.env.REACT_APP_SITE_ACCESS_CODE;
+    const secureCode = import.meta.env.VITE_SITE_ACCESS_CODE;
+
+    if (!secureCode) {
+      alert("Site access protection is not configured.");
+      return;
+    }
 
     if (inputCode === secureCode) {
       sessionStorage.setItem("site_access", "verified");
