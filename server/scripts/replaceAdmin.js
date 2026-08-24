@@ -1,7 +1,6 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const Admin = require("../models/Admin");
+const User = require("../models/User");
 
 const required = (name) => {
   const value = process.env[name];
@@ -21,31 +20,35 @@ async function main() {
 
   await mongoose.connect(mongoUri);
   try {
-    const existingNew = await Admin.findOne({ email: newEmail }).select("+password");
+    const passwordHash = await User.hashPassword(newPassword);
+    const existingNew = await User.findOne({ email: newEmail }).select("+passwordHash");
+
     if (!existingNew) {
-      await Admin.create({
+      await User.create({
         name: newName,
         email: newEmail,
-        password: await bcrypt.hash(newPassword, 12),
+        passwordHash,
         role: "admin",
+        isActive: true,
       });
-      console.log(`Created new administrator: ${newEmail}`);
+      console.log(`Created new portal administrator: ${newEmail}`);
     } else {
       existingNew.name = newName;
-      existingNew.password = await bcrypt.hash(newPassword, 12);
+      existingNew.passwordHash = passwordHash;
       existingNew.role = "admin";
+      existingNew.isActive = true;
       await existingNew.save();
-      console.log(`Updated existing administrator: ${newEmail}`);
+      console.log(`Updated existing portal administrator: ${newEmail}`);
     }
 
-    // Verify the replacement account before removing the old one.
-    const replacement = await Admin.findOne({ email: newEmail }).select("+password");
-    if (!replacement || !(await bcrypt.compare(newPassword, replacement.password))) {
+    // Verify against the same User model used by POST /api/auth/login.
+    const replacement = await User.findOne({ email: newEmail }).select("+passwordHash");
+    if (!replacement || replacement.role !== "admin" || !replacement.isActive || !(await replacement.verifyPassword(newPassword))) {
       throw new Error("Replacement administrator verification failed; old administrator was NOT deleted.");
     }
 
-    const deleted = await Admin.deleteOne({ email: oldEmail });
-    console.log(`Deleted old administrator ${oldEmail}: ${deleted.deletedCount === 1 ? "yes" : "not found"}`);
+    const deleted = await User.deleteOne({ email: oldEmail });
+    console.log(`Deleted old portal administrator ${oldEmail}: ${deleted.deletedCount === 1 ? "yes" : "not found"}`);
     console.log(`Administrator replacement completed successfully for ${newEmail}`);
   } finally {
     await mongoose.disconnect();
