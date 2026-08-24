@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true, select: false },
   role: { type: String, enum: roles, required: true, default: "pupil", index: true },
   phone: { type: String, trim: true },
+  // Parent accounts can be linked to pupils by the school administration.
+  // Keeping the relationship on the parent account makes it possible to support
+  // multiple children without exposing unrelated pupil records.
+  children: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   isActive: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 
