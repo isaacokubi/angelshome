@@ -8,7 +8,7 @@ const Announcement = require("../models/Announcement");
 
 const getUsers = async (req, res) => {
   try {
-    const users = await Admin.find().select("-password").sort({ createdAt: -1 }).lean();
+    const users = await Admin.find().sort({ createdAt: -1 }).lean();
     return res.json(users);
   } catch (error) {
     console.error("Admin users error:", error);
@@ -48,10 +48,8 @@ const login = async (req, res) => {
   }
 
   try {
-    const admin = await Admin.findOne({ email: email.trim().toLowerCase() });
-    if (!admin || admin.role !== "admin") {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
+    const admin = await Admin.findOne({ email: email.trim().toLowerCase() }).select("+password");
+    if (!admin || admin.role !== "admin") return res.status(401).json({ message: "Invalid email or password" });
 
     const match = await bcrypt.compare(password, admin.password);
     if (!match) return res.status(401).json({ message: "Invalid email or password" });
@@ -95,9 +93,7 @@ const dashboard = async (req, res) => {
 
 const createAnnouncement = async (req, res) => {
   const { title, content } = req.body || {};
-  if (!title?.trim() || !content?.trim()) {
-    return res.status(400).json({ message: "Title and content are required" });
-  }
+  if (!title?.trim() || !content?.trim()) return res.status(400).json({ message: "Title and content are required" });
 
   try {
     const announcement = await Announcement.create({ title: title.trim(), content: content.trim() });
