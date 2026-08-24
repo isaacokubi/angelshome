@@ -1,131 +1,54 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import AnnouncementForm from "../components/AnnouncementForm";
 import { apiRequest, clearAdminToken } from "../services/api";
 
+const roleCards = [
+  ["Pupils", "pupils", "/portal/admin/pupils", "Active learners and academic records"],
+  ["Teachers", "teachers", "/portal/admin/teachers", "Teaching staff and learning assignments"],
+  ["Parents", "parents", "/portal/admin/parents", "Families connected to the school"],
+  ["Sponsors", "sponsors", "/portal/admin/sponsors", "Supporters and sponsored learners"],
+];
+const money = (value) => `KES ${Number(value || 0).toLocaleString()}`;
+const dateTime = (value) => value ? new Date(value).toLocaleString() : "—";
+
+function StatCard({ label, value, note, href }) {
+  const content = <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><p className="text-sm font-semibold text-slate-500">{label}</p><p className="mt-2 text-3xl font-black tracking-tight text-blue-950">{value}</p><p className="mt-2 text-xs leading-5 text-slate-500">{note}</p></div>;
+  return href ? <Link to={href} className="block h-full">{content}</Link> : content;
+}
+function Action({ title, description, href }) { return <Link to={href} className="rounded-xl border border-slate-200 p-4 transition hover:border-blue-200 hover:bg-blue-50"><div className="flex items-start justify-between gap-3"><div><h3 className="font-black text-blue-950">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-500">{description}</p></div><span className="text-blue-700" aria-hidden="true">→</span></div></Link>; }
+function LoadingState() { return <div className="min-h-screen bg-slate-50 p-5 md:p-8" aria-live="polite"><div className="mx-auto max-w-7xl space-y-6"><div className="h-40 animate-pulse rounded-3xl bg-slate-200" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-slate-200" />)}</div><div className="h-72 animate-pulse rounded-2xl bg-slate-200" /></div></div>; }
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-
-  const loadDashboard = useCallback(async () => {
-    setError("");
-
+  const [data, setData] = useState(null); const [error, setError] = useState(""); const [refreshing, setRefreshing] = useState(false);
+  const loadDashboard = useCallback(async (silent = false) => {
+    setError(""); if (silent) setRefreshing(true);
     try {
       const result = await apiRequest("/admin/dashboard");
-      setData({
-        totalDonations: Number(result?.totalDonations || 0),
-        totalDonationAmount: Number(result?.totalDonationAmount || 0),
-        totalMessages: Number(result?.totalMessages || 0),
-        donations: Array.isArray(result?.donations) ? result.donations : [],
-        messages: Array.isArray(result?.messages) ? result.messages : [],
-      });
+      setData({ totalDonations: Number(result?.totalDonations || 0), totalDonationAmount: Number(result?.totalDonationAmount || 0), totalMessages: Number(result?.totalMessages || 0), donations: Array.isArray(result?.donations) ? result.donations : [], messages: Array.isArray(result?.messages) ? result.messages : [], announcements: Array.isArray(result?.announcements) ? result.announcements : [], unreadNotifications: Number(result?.unreadNotifications || 0), users: result?.users || {}, coordination: result?.coordination || {} });
     } catch (requestError) {
-      if (requestError.status === 401 || requestError.status === 403) {
-        clearAdminToken();
-        navigate("/admin/login", { replace: true });
-        return;
-      }
-      setError(requestError.message || "Unable to load the dashboard.");
-    }
+      if (requestError.status === 401 || requestError.status === 403) { clearAdminToken(); navigate("/admin/login", { replace: true }); return; }
+      setError(requestError.message || "Unable to load the administration dashboard.");
+    } finally { if (silent) setRefreshing(false); }
   }, [navigate]);
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  const health = useMemo(() => { const coverage = Number(data?.coordination?.academicCoverage || 0); const links = Number(data?.coordination?.parentPupilLinks || 0); if (!data) return { label: "Checking", tone: "bg-slate-100 text-slate-700" }; if (coverage >= 80 && links >= Number(data.users?.parents || 0)) return { label: "Healthy", tone: "bg-emerald-50 text-emerald-700" }; if (coverage > 0 || links > 0) return { label: "Needs attention", tone: "bg-amber-50 text-amber-700" }; return { label: "Setup required", tone: "bg-red-50 text-red-700" }; }, [data]);
+  function logout() { clearAdminToken(); navigate("/admin/login", { replace: true }); }
+  if (!data && !error) return <LoadingState />;
+  if (error) return <div className="min-h-screen bg-slate-50 p-5 md:p-8"><div className="mx-auto max-w-2xl rounded-3xl border border-red-200 bg-white p-8 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-red-600">Administration</p><h1 className="mt-2 text-3xl font-black text-blue-950">Dashboard unavailable</h1><p className="mt-3 text-sm leading-6 text-slate-600" role="alert">{error}</p><button onClick={() => loadDashboard()} className="mt-6 rounded-xl bg-blue-950 px-5 py-3 text-sm font-black text-white hover:bg-blue-900">Try again</button></div></div>;
 
-  useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+  return <div className="min-h-screen bg-slate-50 text-slate-900"><div className="mx-auto max-w-7xl p-5 md:p-8">
+    <header className="rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 p-6 text-white shadow-xl md:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Angels Home Education Centre</p><h1 className="mt-2 text-3xl font-black md:text-4xl">School command centre</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">A single operational view for pupils, teachers, parents, sponsors, communications, learning records and school support.</p></div><div className="flex flex-wrap gap-3"><button onClick={() => loadDashboard(true)} disabled={refreshing} className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold hover:bg-white/15 disabled:opacity-60">{refreshing ? "Refreshing…" : "Refresh data"}</button><button onClick={logout} className="rounded-xl bg-amber-400 px-4 py-3 text-sm font-black text-blue-950 hover:bg-amber-300">Sign out</button></div></div><div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-bold"><span className={`rounded-full px-3 py-2 ${health.tone}`}>● System {health.label}</span><span className="rounded-full bg-white/10 px-3 py-2 text-blue-100">{data.users.total || 0} active accounts</span><span className="rounded-full bg-white/10 px-3 py-2 text-blue-100">{data.unreadNotifications} unread notifications</span></div></header>
 
-  function logout() {
-    clearAdminToken();
-    navigate("/admin/login", { replace: true });
-  }
+    <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{roleCards.map(([label, key, href, note]) => <StatCard key={key} label={label} value={data.users[key] || 0} note={note} href={href} />)}</section>
+    <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Academic coverage" value={`${data.coordination.academicCoverage || 0}%`} note="Active pupils with an academic summary" /><StatCard label="Learning records" value={data.coordination.learningRecords || 0} note="Subjects and progress records" /><StatCard label="Parent-pupil links" value={data.coordination.parentPupilLinks || 0} note="Verified family relationships" href="/portal/admin/relationships" /><StatCard label="Sponsor-pupil links" value={data.coordination.sponsorPupilLinks || 0} note="Verified sponsorship relationships" href="/portal/admin/relationships" /></section>
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-100 p-8">
-        <div className="max-w-3xl mx-auto bg-white rounded-xl shadow p-8">
-          <h1 className="text-3xl font-bold text-blue-900">Admin Dashboard</h1>
-          <p className="mt-4 text-red-600" role="alert">{error}</p>
-          <button onClick={loadDashboard} className="mt-6 bg-blue-900 text-white px-5 py-2 rounded">
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+    <div className="mt-6 grid gap-6 lg:grid-cols-3"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Operations</p><h2 className="mt-1 text-xl font-black text-blue-950">School coordination</h2><p className="mt-1 text-sm text-slate-500">Move from monitoring to action without leaving administration.</p></div><Link to="/portal/admin/relationships" className="rounded-xl bg-blue-950 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-900">Manage relationships</Link></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><Action title="Manage pupils" description="Review active pupil accounts and contact details." href="/portal/admin/pupils" /><Action title="Manage teachers" description="Review teaching staff and learning assignments." href="/portal/admin/teachers" /><Action title="Manage parents" description="Review family accounts and child connections." href="/portal/admin/parents" /><Action title="Manage sponsors" description="Review sponsors and supported learners." href="/portal/admin/sponsors" /><Action title="School notifications" description="Monitor portal communication." href="/portal/notifications" /><Action title="Website & school CMS" description="Manage staff, events, fees, gallery and settings." href="/admin/cms" /></div></section><section className="rounded-2xl bg-blue-950 p-6 text-white shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-amber-300">Finance & support</p><h2 className="mt-1 text-xl font-black">Community activity</h2><div className="mt-5 space-y-4"><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-blue-200">Completed donations</p><p className="mt-1 text-2xl font-black">{money(data.totalDonationAmount)}</p></div><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-blue-200">Donation records</p><p className="mt-1 text-2xl font-black">{data.totalDonations}</p></div><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-blue-200">Contact messages</p><p className="mt-1 text-2xl font-black">{data.totalMessages}</p></div></div></section></div>
 
-  if (!data) {
-    return <div className="p-10">Loading Dashboard...</div>;
-  }
+    <div className="mt-6 grid gap-6 xl:grid-cols-2"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Finance</p><h2 className="mt-1 text-xl font-black text-blue-950">Recent donations</h2></div></div><div className="mt-5 overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-400"><tr><th className="px-2 py-3">Date</th><th className="px-2 py-3">Phone</th><th className="px-2 py-3">Amount</th><th className="px-2 py-3">Status</th></tr></thead><tbody>{data.donations.slice(0, 8).map((donation) => <tr key={donation._id || `${donation.phone}-${donation.createdAt}`} className="border-b border-slate-100"><td className="px-2 py-3 text-xs text-slate-500">{dateTime(donation.createdAt)}</td><td className="px-2 py-3 font-semibold">{donation.phone || "—"}</td><td className="px-2 py-3 font-black">{money(donation.amount)}</td><td className="px-2 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold">{donation.status || "Pending"}</span></td></tr>)}{!data.donations.length && <tr><td colSpan="4" className="px-2 py-8 text-center text-slate-500">No donations recorded.</td></tr>}</tbody></table></div></section><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Communication</p><h2 className="mt-1 text-xl font-black text-blue-950">Recent family messages</h2></div><div className="mt-5 space-y-3">{data.messages.slice(0, 6).map((message) => <article key={message._id || `${message.email}-${message.createdAt}`} className="rounded-xl bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-blue-950">{message.name || "Parent / family"}</p>{message.email && <p className="text-xs text-slate-500">{message.email}</p>}<p className="mt-2 text-sm leading-6 text-slate-600">{message.message || message.subject || "No message content"}</p></div><span className="text-xs text-slate-400">{dateTime(message.createdAt)}</span></div></article>)}{!data.messages.length && <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No family messages.</div>}</div></section></div>
 
-  return (
-    <div className="bg-gray-100 min-h-screen p-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-gray-500">Angels Home Education Centre</p>
-          <h1 className="text-4xl font-bold text-blue-900">School Administration Dashboard</h1>
-        </div>
-        <button onClick={logout} className="border border-blue-900 text-blue-900 px-5 py-2 rounded">
-          Logout
-        </button>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-8 mt-10">
-        <div className="bg-white shadow rounded-xl p-8">
-          <h2 className="text-xl">Donation Records</h2>
-          <p className="text-4xl font-bold text-blue-600">{data.totalDonations}</p>
-        </div>
-        <div className="bg-white shadow rounded-xl p-8">
-          <h2 className="text-xl">Completed Donation Value</h2>
-          <p className="text-4xl font-bold text-green-600">KES {data.totalDonationAmount.toLocaleString()}</p>
-        </div>
-        <div className="bg-white shadow rounded-xl p-8">
-          <h2 className="text-xl">Parent Messages</h2>
-          <p className="text-4xl font-bold text-blue-600">{data.totalMessages}</p>
-        </div>
-      </div>
-
-      <section className="mt-12 bg-white rounded-xl shadow p-8">
-        <h2 className="text-3xl font-bold">Recent Donations</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full mt-6">
-            <thead className="bg-blue-900 text-white">
-              <tr>
-                <th className="p-3 text-left">Phone</th>
-                <th className="text-left">Amount</th>
-                <th className="text-left">Method</th>
-                <th className="text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.donations.map((donation) => (
-                <tr key={donation._id || donation.transactionId || `${donation.phone}-${donation.createdAt}`} className="border-b">
-                  <td className="p-3">{donation.phone || "—"}</td>
-                  <td>KES {Number(donation.amount || 0).toLocaleString()}</td>
-                  <td>{donation.paymentMethod || "—"}</td>
-                  <td>{donation.status || "Pending"}</td>
-                </tr>
-              ))}
-              {!data.donations.length && (
-                <tr><td colSpan="4" className="p-6 text-center text-gray-500">No donations recorded.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-12 bg-white rounded-xl shadow p-8">
-        <h2 className="text-3xl font-bold">Parent Messages</h2>
-        {data.messages.map((message) => (
-          <div key={message._id || `${message.email}-${message.createdAt}`} className="border-b py-5">
-            <h3 className="font-bold">{message.name || "Parent"}</h3>
-            {message.email && <p className="text-sm text-gray-500">{message.email}</p>}
-            <p className="mt-2">{message.message || message.subject || "—"}</p>
-          </div>
-        ))}
-        {!data.messages.length && <p className="py-6 text-gray-500">No parent messages.</p>}
-      </section>
-
-      <AnnouncementForm />
-    </div>
-  );
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">School communications</p><h2 className="mt-1 text-xl font-black text-blue-950">Latest announcements</h2></div><Link to="/portal/notifications" className="text-sm font-bold text-blue-700">View notifications →</Link></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{data.announcements.map((item) => <article key={item._id} className="rounded-xl border border-slate-100 bg-slate-50 p-4"><h3 className="font-black text-blue-950">{item.title}</h3><p className="mt-2 text-sm leading-6 text-slate-600">{item.content}</p><p className="mt-2 text-xs text-slate-400">{dateTime(item.createdAt)}</p></article>)}{!data.announcements.length && <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 md:col-span-2 xl:col-span-3">No announcements have been published yet.</div>}</div></section>
+    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="mb-4"><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Broadcast</p><h2 className="mt-1 text-xl font-black text-blue-950">Publish a school announcement</h2><p className="mt-1 text-sm text-slate-500">Use announcements for school-wide information.</p></div><AnnouncementForm /></section>
+  </div></div>;
 }
