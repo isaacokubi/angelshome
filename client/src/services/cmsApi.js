@@ -1,44 +1,19 @@
-const API_URL = "https://angelshome-1.onrender.com/api/cms";
-
-function getToken() {
-  return localStorage.getItem("adminToken");
-}
-
-async function request(endpoint, options = {}) {
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...(options.headers || {}),
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || "Request failed");
-  }
-
-  return response.json();
-}
+import { apiRequest } from "./api";
 
 export const cmsApi = {
-  get: (endpoint) => request(endpoint),
-
+  get: (endpoint) => apiRequest(`/cms${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`),
   create: (endpoint, data) =>
-    request(endpoint, {
+    apiRequest(`/cms${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
-
   update: (endpoint, data) =>
-    request(endpoint, {
+    apiRequest(`/cms${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-
   delete: (endpoint) =>
-    request(endpoint, {
+    apiRequest(`/cms${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`, {
       method: "DELETE",
     }),
 };
