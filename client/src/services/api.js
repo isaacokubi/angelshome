@@ -1,4 +1,5 @@
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = `${configuredApiUrl.replace(/\/$/, "")}${/\/api$/i.test(configuredApiUrl) ? "" : "/api"}`;
 
 export function getApiUrl(path = "") {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
