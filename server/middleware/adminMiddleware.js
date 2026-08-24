@@ -1,13 +1,9 @@
-const admin = (req, res, next) => {
-  if (
-    req.user &&
-    req.user.role === "admin"
-  ) {
-    next();
-  } else {
-    res.status(403);
-    throw new Error("Admin access only");
-  }
-};
+module.exports = function adminMiddleware(req, res, next) {
+  const role = req.user?.role || req.admin?.role;
 
-module.exports = admin;
+  if (role !== "admin") {
+    return res.status(403).json({ message: "Admin access only" });
+  }
+
+  next();
+};
