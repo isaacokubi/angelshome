@@ -138,16 +138,18 @@ function Field({ label, type = "text", value, onChange, required, autoComplete, 
 
 function AuthLayout({ title, subtitle, children }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 px-4 py-10">
-      <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl md:p-9">
-        <Link to="/" className="text-sm font-black text-amber-600 hover:text-amber-700">← Angels Home Education Centre</Link>
-        <div className="mt-7">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Secure school portal</p>
-          <h1 className="mt-2 text-3xl font-black text-blue-950">{title}</h1>
-          <p className="mb-7 mt-2 text-sm leading-6 text-slate-500">{subtitle}</p>
+    <main className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-10 sm:py-14">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-center">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/60 md:p-9">
+          <div className="mb-7 border-b border-slate-100 pb-5">
+            <Link to="/" className="inline-flex items-center text-sm font-black text-amber-600 transition hover:text-amber-700">← Angels Home Education Centre</Link>
+            <p className="mt-5 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Secure school portal</p>
+            <h1 className="mt-2 text-3xl font-black text-blue-950">{title}</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">{subtitle}</p>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </main>
   );
 }
