@@ -17,7 +17,7 @@ export function Notifications() {
     try {
       const session = JSON.parse(localStorage.getItem("angelshome_session") || "null");
       return session?.role || "pupil";
-    } catch (error) {
+    } catch {
       return "pupil";
     }
   });
