@@ -14,6 +14,7 @@ router.post("/login", controller.login);
 router.get("/dashboard", auth, admin, controller.dashboard);
 router.get("/users", auth, admin, controller.getUsers);
 router.post("/announcement", auth, admin, controller.createAnnouncement);
+router.delete("/announcement/:id", auth, admin, controller.deleteAnnouncement);
 
 router.get("/announcements", async (req, res) => {
   try {
