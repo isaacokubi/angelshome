@@ -104,4 +104,19 @@ const createAnnouncement = async (req, res) => {
   }
 };
 
-module.exports = { getUsers, register, login, dashboard, createAnnouncement };
+const deleteAnnouncement = async (req, res) => {
+  const { id } = req.params;
+  if (!id) return res.status(400).json({ message: "Announcement id is required" });
+
+  try {
+    const announcement = await Announcement.findByIdAndDelete(id);
+    if (!announcement) return res.status(404).json({ message: "Announcement not found" });
+    return res.json({ message: "Announcement deleted" });
+  } catch (error) {
+    if (error?.name === "CastError") return res.status(400).json({ message: "Invalid announcement id" });
+    console.error("Announcement deletion error:", error);
+    return res.status(500).json({ message: "Unable to delete announcement" });
+  }
+};
+
+module.exports = { getUsers, register, login, dashboard, createAnnouncement, deleteAnnouncement };
