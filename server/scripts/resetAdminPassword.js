@@ -12,7 +12,13 @@ const required = (name) => {
 };
 
 async function main() {
-  const mongoUri = required("MONGODB_URI");
+  // The application uses MONGO_URI. Keep MONGODB_URI as a backwards-compatible
+  // alias so this one-off maintenance script works with both configurations.
+  const mongoUri = String(process.env.MONGO_URI || process.env.MONGODB_URI || "").trim();
+  if (!mongoUri) {
+    throw new Error("MONGO_URI is required");
+  }
+
   const email = required("ADMIN_RESET_EMAIL").toLowerCase();
   const password = required("ADMIN_RESET_PASSWORD");
 
