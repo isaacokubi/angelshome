@@ -1,0 +1,10 @@
+const express = require("express");
+const Notification = require("../models/Notification");
+const User = require("../models/User");
+const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
+const router = express.Router();
+router.use(requireSchoolAuth);
+router.get("/", async (req, res, next) => { try { const docs = await Notification.find({ $or: [{ recipient: req.schoolUser._id }, { recipient: null, audience: "all" }, { recipient: null, audience: req.schoolUser.role }] }).sort({ createdAt: -1 }).limit(50).lean(); res.json({ success: true, notifications: docs }); } catch (e) { next(e); } });
+router.patch("/:id/read", async (req, res, next) => { try { await Notification.updateOne({ _id: req.params.id, recipient: req.schoolUser._id }, { $set: { readAt: new Date() } }); res.json({ success: true }); } catch (e) { next(e); } });
+router.post("/broadcast", requireSchoolRole("admin"), async (req, res, next) => { try { const { title, message, audience = "all" } = req.body || {}; if (!title || !message) return res.status(400).json({ success: false, message: "Title and message are required" }); const recipients = audience === "all" ? null : await User.find({ role: audience, isActive: true }).select("_id").lean(); const docs = recipients ? recipients.map((u) => ({ recipient: u._id, audience, title, message })) : [{ audience: "all", title, message }]; await Notification.insertMany(docs); res.status(201).json({ success: true, count: docs.length }); } catch (e) { next(e); } });
+module.exports = router;
