@@ -1,47 +1,15 @@
-export default function StaffCard({
-    image,
-    name,
-    position,
-    description
-}) {
+import { useState } from "react";
 
-    return (
-
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition duration-300">
-
-            {/* Image container */}
-            <div className="w-full h-96 bg-gray-100 flex items-center justify-center">
-
-                <img
-                    src={image}
-                    alt={name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                />
-
-            </div>
-
-
-            <div className="p-6">
-
-                <h3 className="text-2xl font-bold text-blue-900">
-                    {name}
-                </h3>
-
-
-                <p className="text-green-700 font-semibold mt-2">
-                    {position}
-                </p>
-
-
-                <p className="mt-4 text-gray-600 leading-7">
-                    {description}
-                </p>
-
-            </div>
-
-        </div>
-
-    );
-
+export default function StaffCard({ image, name, position, description }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  return (
+    <article className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+      <div className="relative h-72 overflow-hidden bg-gradient-to-br from-blue-950 to-blue-800">
+        {image && !imageFailed ? <img src={image} alt={`${name} — ${position}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" onError={() => setImageFailed(true)} /> : <div className="flex h-full items-center justify-center text-5xl font-black text-white/90" aria-label={`${name} profile placeholder`}>{initials}</div>}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/80 to-transparent p-5 pt-16"><span className="inline-flex rounded-full bg-amber-400 px-3 py-1 text-xs font-black uppercase tracking-wider text-blue-950">{position}</span></div>
+      </div>
+      <div className="p-6"><h3 className="text-xl font-black text-blue-950">{name}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{description}</p></div>
+    </article>
+  );
 }
