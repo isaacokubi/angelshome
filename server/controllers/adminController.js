@@ -6,125 +6,106 @@ const Donation = require("../models/Donation");
 const Contact = require("../models/Contact");
 const Announcement = require("../models/Announcement");
 
-// Get all users/admins
 const getUsers = async (req, res) => {
-    try {
-        const users = await Admin.find().select("-password");
-
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
-    }
+  try {
+    const users = await Admin.find().select("-password").sort({ createdAt: -1 }).lean();
+    return res.json(users);
+  } catch (error) {
+    console.error("Admin users error:", error);
+    return res.status(500).json({ message: "Unable to load administrators" });
+  }
 };
 
-// Register admin
 const register = async (req, res) => {
-    try {
-        const { name, email, password } = req.body;
+  const { name, email, password } = req.body || {};
+  if (!name?.trim() || !email?.trim() || typeof password !== "string" || password.length < 10) {
+    return res.status(400).json({ message: "Name, email and a password of at least 10 characters are required" });
+  }
 
-        const hashed = await bcrypt.hash(password, 12);
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const exists = await Admin.exists({ email: normalizedEmail });
+    if (exists) return res.status(409).json({ message: "An administrator with that email already exists" });
 
-        const admin = await Admin.create({
-            name,
-            email,
-            password: hashed,
-        });
-
-        res.json({
-            message: "Admin created",
-            admin,
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
-    }
+    const hashed = await bcrypt.hash(password, 12);
+    const admin = await Admin.create({ name: name.trim(), email: normalizedEmail, password: hashed, role: "admin" });
+    return res.status(201).json({ message: "Admin created", admin: { id: admin._id, name: admin.name, email: admin.email, role: admin.role } });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ message: "An administrator with that email already exists" });
+    console.error("Admin registration error:", error);
+    return res.status(500).json({ message: "Unable to create administrator" });
+  }
 };
 
-// Login admin
 const login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+  const { email, password } = req.body || {};
+  if (!email?.trim() || typeof password !== "string") {
+    return res.status(400).json({ message: "Email and password are required" });
+  }
+  if (!process.env.JWT_SECRET) {
+    console.error("JWT_SECRET is not configured");
+    return res.status(500).json({ message: "Authentication service is not configured" });
+  }
 
-        const admin = await Admin.findOne({ email });
-
-        if (!admin) {
-            return res.status(404).json({
-                message: "Admin not found",
-            });
-        }
-
-        const match = await bcrypt.compare(
-            password,
-            admin.password
-        );
-
-        if (!match) {
-            return res.status(401).json({
-                message: "Invalid password",
-            });
-        }
-
-        const token = jwt.sign(
-            {
-                id: admin._id,
-                role: admin.role,
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "1d",
-            }
-        );
-
-        res.json({ token });
-    } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
+  try {
+    const admin = await Admin.findOne({ email: email.trim().toLowerCase() });
+    if (!admin || admin.role !== "admin") {
+      return res.status(401).json({ message: "Invalid email or password" });
     }
+
+    const match = await bcrypt.compare(password, admin.password);
+    if (!match) return res.status(401).json({ message: "Invalid email or password" });
+
+    const token = jwt.sign(
+      { id: String(admin._id), role: admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
+    );
+
+    return res.json({ token, user: { id: admin._id, name: admin.name, email: admin.email, role: admin.role } });
+  } catch (error) {
+    console.error("Admin login error:", error);
+    return res.status(500).json({ message: "Unable to sign in" });
+  }
 };
 
-// Admin dashboard
 const dashboard = async (req, res) => {
-    try {
-        const donations = await Donation.find();
-        const messages = await Contact.find();
+  try {
+    const [donations, messages] = await Promise.all([
+      Donation.find().sort({ createdAt: -1 }).limit(50).lean(),
+      Contact.find().sort({ createdAt: -1 }).limit(50).lean(),
+    ]);
 
-        res.json({
-            totalDonations: donations.length,
-            totalMessages: messages.length,
-            donations,
-            messages,
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
-    }
+    const totalDonationAmount = donations
+      .filter((donation) => donation.status === "Completed")
+      .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
+
+    return res.json({
+      totalDonations: donations.length,
+      totalDonationAmount,
+      totalMessages: messages.length,
+      donations,
+      messages,
+    });
+  } catch (error) {
+    console.error("Admin dashboard error:", error);
+    return res.status(500).json({ message: "Unable to load dashboard" });
+  }
 };
 
-// Create announcement
 const createAnnouncement = async (req, res) => {
-    try {
-        const announcement = await Announcement.create(req.body);
+  const { title, content } = req.body || {};
+  if (!title?.trim() || !content?.trim()) {
+    return res.status(400).json({ message: "Title and content are required" });
+  }
 
-        res.json({
-            message: "Announcement created",
-            announcement,
-        });
-    } catch (error) {
-        res.status(500).json({
-            message: error.message,
-        });
-    }
+  try {
+    const announcement = await Announcement.create({ title: title.trim(), content: content.trim() });
+    return res.status(201).json({ message: "Announcement created", announcement });
+  } catch (error) {
+    console.error("Announcement error:", error);
+    return res.status(500).json({ message: "Unable to create announcement" });
+  }
 };
 
-module.exports = {
-    getUsers,
-    register,
-    login,
-    dashboard,
-    createAnnouncement,
-};
+module.exports = { getUsers, register, login, dashboard, createAnnouncement };
