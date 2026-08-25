@@ -2,10 +2,10 @@ import { Link } from "react-router-dom";
 
 const roleActions = {
   admin: [["Manage pupils", "/portal/admin/pupils"], ["Manage teachers", "/portal/admin/teachers"], ["Manage parents", "/portal/admin/parents"], ["Manage sponsors", "/portal/admin/sponsors"], ["Timetable", "/admin/smis/timetable"]],
-  teacher: [["My classes", "/portal/teacher/classes"], ["My timetable", "/admin/smis/timetable"], ["School notifications", "/portal/notifications"]],
-  pupil: [["My learning", "/portal/pupil/learning"], ["My timetable", "/admin/smis/timetable"], ["School notifications", "/portal/notifications"]],
-  parent: [["School updates", "/portal/notifications"], ["My children", "/portal/parent#children"], ["School timetable", "/admin/smis/timetable"]],
-  sponsor: [["My impact", "/portal/sponsor/impact"], ["School timetable", "/admin/smis/timetable"], ["School notifications", "/portal/notifications"]],
+  teacher: [["My classes", "/portal/teacher/classes"], ["My timetable", "/portal/timetable"], ["School notifications", "/portal/notifications"]],
+  pupil: [["My learning", "/portal/pupil/learning"], ["My timetable", "/portal/timetable"], ["School notifications", "/portal/notifications"]],
+  parent: [["School updates", "/portal/notifications"], ["My children", "/portal/parent#children"], ["School timetable", "/portal/timetable"]],
+  sponsor: [["My impact", "/portal/sponsor/impact"], ["School timetable", "/portal/timetable"], ["School notifications", "/portal/notifications"]],
 };
 
 export default function SharedSchoolSnapshot({ data, role }) {
