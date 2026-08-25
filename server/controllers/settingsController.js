@@ -5,8 +5,14 @@ const DEFAULT_KEY = "primary";
 async function getOrCreateSettings() {
   let settings = await SchoolSettings.findOne({ key: DEFAULT_KEY }).lean();
   if (!settings) {
-    settings = await SchoolSettings.create({ key: DEFAULT_KEY });
-    settings = settings.toObject();
+    const existing = await SchoolSettings.findOne({}).lean();
+    if (existing) {
+      await SchoolSettings.updateOne({ _id: existing._id }, { $set: { key: DEFAULT_KEY } });
+      settings = await SchoolSettings.findById(existing._id).lean();
+    } else {
+      settings = await SchoolSettings.create({ key: DEFAULT_KEY });
+      settings = settings.toObject();
+    }
   }
   return settings;
 }
@@ -39,10 +45,11 @@ exports.getAdminSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
   try {
     const update = sanitizeSettings(req.body);
+    await getOrCreateSettings();
     const settings = await SchoolSettings.findOneAndUpdate(
       { key: DEFAULT_KEY },
-      { $set: update, $setOnInsert: { key: DEFAULT_KEY } },
-      { new: true, upsert: true, runValidators: true }
+      { $set: update },
+      { new: true, runValidators: true }
     ).lean();
     return res.json({ success: true, message: "School settings updated successfully", data: settings });
   } catch (error) {
