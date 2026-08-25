@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalShell from "./PortalShell";
 import AdminDashboard from "./AdminDashboard";
+import SharedSchoolSnapshot from "./SharedSchoolSnapshot";
 import { portalApi } from "../services/api";
 
 export default function PortalDashboard() {
@@ -33,7 +34,7 @@ export default function PortalDashboard() {
 function StandardDashboard({ data, role }) {
   return <>
     <div className="mb-8"><p className="text-sm font-bold text-amber-600">{data?.profile?.name ? `WELCOME BACK, ${data.profile.name.toUpperCase()}` : "SCHOOL PORTAL"}</p><h2 className="mt-1 text-3xl font-black text-blue-950">{role === "pupil" ? "My learning" : `${data?.profile?.roleLabel || "School"} dashboard`}</h2><p className="mt-2 max-w-2xl text-slate-600">Your portal information is loaded from the school database and reflects your current account.</p></div>
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{(data.stats || []).map((stat) => <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><p className="text-sm font-semibold text-slate-500">{stat.label}</p><p className="mt-3 text-3xl font-black text-blue-950">{stat.value}</p><p className="mt-2 text-xs font-semibold text-slate-500">{stat.note}</p></div>)}</div>
+    <SharedSchoolSnapshot data={data} role={role} />
     <div className="mt-8 grid gap-6 lg:grid-cols-3"><section className="rounded-2xl border border-slate-200 bg-white p-6 lg:col-span-2"><div className="flex items-center justify-between"><h3 className="text-lg font-black text-blue-950">Recent school activity</h3><Link to="/portal/notifications" className="text-sm font-bold text-blue-700">View all</Link></div><div className="mt-5 space-y-4">{data.notifications?.length ? data.notifications.map((item) => <div key={item._id} className="rounded-xl bg-slate-50 p-4"><p className="font-bold text-slate-800">{item.title}</p><p className="mt-1 text-sm text-slate-600">{item.message}</p></div>) : <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No school activity has been published for your account.</div>}</div></section><section className="rounded-2xl bg-blue-950 p-6 text-white"><p className="text-xs font-bold uppercase tracking-widest text-amber-400">School office</p><h3 className="mt-2 text-xl font-black">Need assistance?</h3><p className="mt-3 text-sm leading-6 text-blue-100">Contact the school through the official contact channel configured for this deployment.</p><Link to="/contact" className="mt-6 inline-flex rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-blue-950">Contact the school</Link></section></div>
   </>;
 }
