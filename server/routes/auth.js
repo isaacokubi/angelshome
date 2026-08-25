@@ -15,16 +15,57 @@ router.post("/register", async (req, res, next) => {
     const { name, email, password, role = "pupil" } = req.body || {};
     const phone = normalizePhone(req.body?.phone);
     const parentPhone = normalizePhone(req.body?.parentPhone);
-    if (!name || !validator.isEmail(String(email || "")) || typeof password !== "string" || password.length < 8) return res.status(400).json({ success: false, message: "Name, valid email and password of at least 8 characters are required" });
-    if (!["pupil", "teacher", "sponsor", "parent"].includes(role)) return res.status(400).json({ success: false, message: "Invalid self-registration role" });
+    const childEmail = String(req.body?.childEmail || "").toLowerCase().trim();
+
+    if (!name || !validator.isEmail(String(email || "")) || typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ success: false, message: "Name, valid email and password of at least 8 characters are required" });
+    }
+    if (!["pupil", "teacher", "sponsor", "parent"].includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid self-registration role" });
+    }
     if (!validPhone(phone)) return res.status(400).json({ success: false, message: "A valid phone number is required" });
-    if (role === "pupil" && !validPhone(parentPhone)) return res.status(400).json({ success: false, message: "A valid parent or guardian phone number is required for pupil registration" });
+    if (role === "pupil" && !validPhone(parentPhone)) {
+      return res.status(400).json({ success: false, message: "A valid parent or guardian phone number is required for pupil registration" });
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
-    if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ success: false, message: "An account with this email already exists" });
+    if (await User.exists({ email: normalizedEmail })) {
+      return res.status(409).json({ success: false, message: "An account with this email already exists" });
+    }
+
+    let verifiedChild = null;
+    if (role === "parent") {
+      if (!validator.isEmail(childEmail)) {
+        return res.status(400).json({ success: false, message: "Enter the email address of your registered pupil" });
+      }
+      if (childEmail === normalizedEmail || phone === normalizePhone(childEmail)) {
+        return res.status(400).json({ success: false, message: "A parent account must use the parent's own contact details" });
+      }
+
+      verifiedChild = await User.findOne({ email: childEmail, role: "pupil", isActive: true }).select("name email phone parentPhone");
+      if (!verifiedChild || normalizePhone(verifiedChild.parentPhone) !== phone || normalizePhone(verifiedChild.phone) === phone) {
+        return res.status(403).json({
+          success: false,
+          message: "Parent registration could not be verified. Use the parent/guardian phone number recorded for the pupil, or contact the school administrator."
+        });
+      }
+    }
+
     const passwordHash = await User.hashPassword(password);
-    const user = await User.create({ name: name.trim(), email: normalizedEmail, passwordHash, role, phone, ...(role === "pupil" ? { parentPhone } : {}) });
+    const user = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      passwordHash,
+      role,
+      phone,
+      ...(role === "pupil" ? { parentPhone } : {}),
+      ...(role === "parent" && verifiedChild ? { children: [verifiedChild._id] } : {})
+    });
+
     return res.status(201).json({ success: true, token: signToken(user), user: publicUser(user) });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.post("/login", async (req, res, next) => {
