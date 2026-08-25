@@ -19,18 +19,16 @@ const validObjectId = (value) => mongoose.Types.ObjectId.isValid(value);
 async function schoolSnapshot() {
   const start = new Date(); start.setHours(0, 0, 0, 0);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  const [users, classes, subjects, attendance, openExams, resultsToday] = await Promise.all([
+  const [users, classes, subjects, attendance, openExams, resultsToday, totalResults] = await Promise.all([
     User.aggregate([{ $match: { isActive: true } }, { $group: { _id: "$role", count: { $sum: 1 } } }]),
-    SchoolClass.countDocuments({ isActive: true }),
-    Subject.countDocuments({ isActive: true }),
+    SchoolClass.countDocuments({ isActive: true }), Subject.countDocuments({ isActive: true }),
     Attendance.aggregate([{ $match: { date: { $gte: start, $lt: end } } }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
-    Exam.countDocuments({ status: "open" }),
-    ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }),
+    Exam.countDocuments({ status: "open" }), ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }), ExamResult.countDocuments(),
   ]);
   const counts = Object.fromEntries(users.map((x) => [x._id, x.count]));
   const attendanceToday = Object.fromEntries(attendance.map((x) => [x._id, x.count]));
   const totalMarked = Object.values(attendanceToday).reduce((sum, value) => sum + value, 0);
-  return { pupils: counts.pupil || 0, teachers: counts.teacher || 0, parents: counts.parent || 0, sponsors: counts.sponsor || 0, classes, subjects, openExams, resultsEnteredToday: resultsToday, attendanceToday: { ...attendanceToday, totalMarked, attendanceRate: totalMarked ? Math.round(((attendanceToday.present || 0) / totalMarked) * 100) : null } };
+  return { pupils: counts.pupil || 0, teachers: counts.teacher || 0, parents: counts.parent || 0, sponsors: counts.sponsor || 0, classes, subjects, openExams, resultsEnteredToday: resultsToday, totalResults, attendanceToday: { ...attendanceToday, totalMarked, attendanceRate: totalMarked ? Math.round(((attendanceToday.present || 0) / totalMarked) * 100) : null } };
 }
 
 async function buildPupilSummaries(pupilIds) {
@@ -46,14 +44,30 @@ async function buildPupilSummaries(pupilIds) {
   return pupils.map((pupil) => ({ ...pupil, academic: academicMap[pupil._id.toString()] || null, learning: learningMap[pupil._id.toString()] || { subjects: 0, averageProgress: null } }));
 }
 
+async function resultSnapshot(user) {
+  let pupilIds = null;
+  if (user.role === "pupil") pupilIds = [user._id];
+  if (user.role === "parent") pupilIds = Array.isArray(user.children) ? user.children : [];
+  if (user.role === "sponsor") pupilIds = Array.isArray(user.sponsoredPupils) ? user.sponsoredPupils : [];
+  const filter = pupilIds ? { pupil: { $in: pupilIds.filter(validObjectId) } } : {};
+  const [count, aggregate, recent] = await Promise.all([
+    ExamResult.countDocuments(filter),
+    ExamResult.aggregate([{ $match: filter }, { $group: { _id: null, totalMarks: { $sum: "$marks" }, totalMaxMarks: { $sum: "$maxMarks" }, subjects: { $addToSet: "$subject" } } }]),
+    ExamResult.find(filter).populate("exam", "name term academicYear").populate("pupil", "name").populate("subject", "name code").sort({ createdAt: -1 }).limit(5).lean(),
+  ]);
+  const totals = aggregate[0] || { totalMarks: 0, totalMaxMarks: 0, subjects: [] };
+  return { count, subjects: totals.subjects.length, average: totals.totalMaxMarks ? Math.round((totals.totalMarks / totals.totalMaxMarks) * 100) : null, recent };
+}
+
 router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
   try {
     const user = req.schoolUser;
-    const [school, notifications, unreadNotifications, academic] = await Promise.all([
+    const [school, notifications, unreadNotifications, academic, results] = await Promise.all([
       schoolSnapshot(),
       Notification.find({ $or: [{ recipient: user._id }, { audience: "all" }, { audience: user.role }] }).sort({ createdAt: -1 }).limit(5).lean(),
       Notification.countDocuments({ $or: [{ recipient: user._id }, { audience: "all" }, { audience: user.role }], readAt: null }),
       user.role === "pupil" ? StudentAcademicRecord.findOne({ pupil: user._id }).lean() : null,
+      resultSnapshot(user),
     ]);
     let children = [], sponsoredPupils = [];
     if (user.role === "parent") children = await buildPupilSummaries(user.children || []);
@@ -62,22 +76,37 @@ router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
     if (user.role === "pupil") stats = [
       { label: "Attendance", value: academic?.attendanceRate == null ? "Not recorded" : `${academic.attendanceRate}%`, note: academic?.attendanceRate == null ? "Awaiting school records" : "Recorded in school system" },
       { label: "Subjects", value: formatStat(academic?.subjectsCount), note: academic?.subjectsCount == null ? "Awaiting enrolment data" : "Current academic record" },
-      { label: "Assignments", value: formatStat(academic?.assignmentsDue), note: academic?.assignmentsDue == null ? "No assignment data" : "Currently due" },
-      { label: "Average", value: academic?.averageScore == null ? "Not recorded" : `${academic.averageScore}%`, note: academic?.averageScore == null ? "Awaiting assessment data" : "Current academic record" },
+      { label: "Results", value: results.count, note: results.count ? `${results.average}% average` : "Awaiting assessment data" },
+      { label: "Average", value: results.average == null ? "Not recorded" : `${results.average}%`, note: results.average == null ? "Awaiting assessment data" : "Live exam results" },
     ];
     else if (user.role === "teacher") stats = [
-      { label: "Pupils", value: school.pupils, note: "Active school pupils" }, { label: "Classes", value: school.classes, note: "Active classes" }, { label: "Subjects", value: school.subjects, note: "Active subjects" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
+      { label: "Pupils", value: school.pupils, note: "Active school pupils" }, { label: "Classes", value: school.classes, note: "Active classes" }, { label: "Results", value: results.count, note: "Results in school records" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
     ];
     else if (user.role === "sponsor") stats = [
-      { label: "My pupils", value: sponsoredPupils.length, note: sponsoredPupils.length ? "Linked pupils" : "Awaiting school linkage" }, { label: "School pupils", value: school.pupils, note: "Active school pupils" }, { label: "Open exams", value: school.openExams, note: "Currently open" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
+      { label: "My pupils", value: sponsoredPupils.length, note: sponsoredPupils.length ? "Linked pupils" : "Awaiting school linkage" }, { label: "Results", value: results.count, note: results.count ? `${results.average}% average` : "Awaiting school results" }, { label: "Open exams", value: school.openExams, note: "Currently open" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
     ];
     else if (user.role === "parent") stats = [
-      { label: "My children", value: children.length, note: children.length ? "Linked pupil accounts" : "Awaiting school linkage" }, { label: "School pupils", value: school.pupils, note: "Active school pupils" }, { label: "Open exams", value: school.openExams, note: "Currently open" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
+      { label: "My children", value: children.length, note: children.length ? "Linked pupil accounts" : "Awaiting school linkage" }, { label: "Results", value: results.count, note: results.count ? `${results.average}% average` : "Awaiting school results" }, { label: "Open exams", value: school.openExams, note: "Currently open" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
     ];
     else stats = [
-      { label: "Pupils", value: school.pupils, note: "Active accounts" }, { label: "Teachers", value: school.teachers, note: "Active accounts" }, { label: "Parents", value: school.parents, note: "Active accounts" }, { label: "Sponsors", value: school.sponsors, note: "Active accounts" },
+      { label: "Pupils", value: school.pupils, note: "Active accounts" }, { label: "Teachers", value: school.teachers, note: "Active accounts" }, { label: "Results", value: school.totalResults, note: `${school.resultsEnteredToday} entered today` }, { label: "Open exams", value: school.openExams, note: "Currently open" },
     ];
-    return res.json({ success: true, profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, roleLabel: roleLabels[user.role] || user.role }, stats, school, notifications, unreadNotifications, children, sponsoredPupils });
+    return res.json({ success: true, profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, roleLabel: roleLabels[user.role] || user.role }, stats, school, results, notifications, unreadNotifications, children, sponsoredPupils });
+  } catch (error) { next(error); }
+});
+
+router.get("/results", requireSchoolAuth, async (req, res, next) => {
+  try {
+    const user = req.schoolUser;
+    const filter = {};
+    if (user.role === "pupil") filter.pupil = user._id;
+    if (user.role === "parent") filter.pupil = { $in: Array.isArray(user.children) ? user.children : [] };
+    if (user.role === "sponsor") filter.pupil = { $in: Array.isArray(user.sponsoredPupils) ? user.sponsoredPupils : [] };
+    if (req.query.exam && validObjectId(req.query.exam)) filter.exam = req.query.exam;
+    if (req.query.pupil && validObjectId(req.query.pupil) && ["admin", "teacher"].includes(user.role)) filter.pupil = req.query.pupil;
+    const results = await ExamResult.find(filter).populate("exam", "name type term academicYear").populate("pupil", "name email").populate("subject", "name code").sort({ createdAt: -1 }).limit(1000).lean();
+    const totals = results.reduce((acc, item) => { acc.marks += Number(item.marks || 0); acc.maxMarks += Number(item.maxMarks || 0); return acc; }, { marks: 0, maxMarks: 0 });
+    return res.json({ success: true, profile: { id: user._id, name: user.name, role: user.role, roleLabel: roleLabels[user.role] || user.role }, results, summary: { count: results.length, subjects: new Set(results.map((r) => r.subject?._id?.toString()).filter(Boolean)).size, average: totals.maxMarks ? Math.round((totals.marks / totals.maxMarks) * 100) : null } });
   } catch (error) { next(error); }
 });
 
