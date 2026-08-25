@@ -4,12 +4,19 @@ const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const SchoolClass = require("../models/SchoolClass");
 const Subject = require("../models/Subject");
 const Timetable = require("../models/Timetable");
+const SchoolTimetableConfig = require("../models/SchoolTimetableConfig");
 
 const router = express.Router();
 const adminOnly = requireSchoolRole("admin");
 
+const ensureUnlocked = async () => {
+  const locked = await SchoolTimetableConfig.exists({ locked: true });
+  return !locked;
+};
+
 router.delete("/classes/:id", requireSchoolAuth, adminOnly, async (req, res, next) => {
   try {
+    if (!(await ensureUnlocked())) return res.status(409).json({ success: false, message: "A timetable is locked. Unlock it before deleting classes." });
     const schoolClass = await SchoolClass.findOne({ _id: req.params.id, isActive: true });
     if (!schoolClass) return res.status(404).json({ success: false, message: "Active class not found." });
     const timetableCount = await Timetable.countDocuments({ schoolClass: schoolClass._id, isActive: true });
@@ -23,6 +30,7 @@ router.delete("/classes/:id", requireSchoolAuth, adminOnly, async (req, res, nex
 
 router.delete("/subjects/:id", requireSchoolAuth, adminOnly, async (req, res, next) => {
   try {
+    if (!(await ensureUnlocked())) return res.status(409).json({ success: false, message: "A timetable is locked. Unlock it before deleting subjects." });
     const subject = await Subject.findOne({ _id: req.params.id, isActive: true });
     if (!subject) return res.status(404).json({ success: false, message: "Active subject not found." });
     const timetableCount = await Timetable.countDocuments({ subject: subject._id, isActive: true });
