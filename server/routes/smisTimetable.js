@@ -1,6 +1,6 @@
 const express = require("express");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
-const { listTimetable, getTimetableConfig, createTimetable, updateTimetable, deleteTimetable, generateTimetable } = require("../controllers/smisTimetableController");
+const { getTimetableConfig, generateTimetable, createTimetable, updateTimetable, deleteTimetable, listTimetable } = require("../controllers/smisTimetableGenerationControllerV2");
 const { listScopedTimetable } = require("../controllers/scopedTimetableController");
 
 const router = express.Router();
