@@ -1,1 +1,0 @@
-SMIS Phase 1 foundation merged through PR #5. Next workstream: operational pupil, class, subject, attendance, examination, marks-entry and report-card screens, followed by fees and M-Pesa finance.
