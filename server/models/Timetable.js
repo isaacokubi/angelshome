@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const timetableSchema = new mongoose.Schema({
   schoolClass: { type: mongoose.Schema.Types.ObjectId, ref: 'SchoolClass', required: true, index: true },
@@ -18,4 +18,4 @@ const timetableSchema = new mongoose.Schema({
 timetableSchema.index({ schoolClass: 1, stream: 1, dayOfWeek: 1, period: 1, academicYear: 1, term: 1 }, { unique: true });
 timetableSchema.index({ teacher: 1, dayOfWeek: 1, period: 1, academicYear: 1, term: 1 }, { unique: true, sparse: true });
 
-export default mongoose.model('Timetable', timetableSchema);
+module.exports = mongoose.model('Timetable', timetableSchema);
