@@ -44,8 +44,6 @@ router.patch("/allocations/:classId/:subjectId", requireSchoolAuth, adminOnly, a
     if (!teachers.length) return res.status(400).json({ success: false, message: "Select at least one teacher for this class subject." });
     const validTeachers = await User.find({ _id: { $in: teachers }, role: "teacher", isActive: true }).select("_id").lean();
     if (validTeachers.length !== teachers.length) return res.status(400).json({ success: false, message: "One or more selected teachers are invalid or inactive." });
-    const globallyAllocated = new Set((subject.teachers || []).map(String));
-    if (teachers.some((teacher) => !globallyAllocated.has(teacher))) return res.status(400).json({ success: false, message: "Each class teacher allocation must also be globally allocated to the subject." });
     const allocation = await ClassSubjectAllocation.findOneAndUpdate(
       { schoolClass: classId, subject: subjectId, academicYear },
       { $set: { teachers, isActive: true, updatedBy: req.schoolUser?._id || null } },
