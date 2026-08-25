@@ -8,6 +8,7 @@ const Attendance = require("../models/Attendance");
 const Exam = require("../models/Exam");
 const ExamResult = require("../models/ExamResult");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
+const { getTeachers, setTeacherCode, allocateSubjectTeachers, createClass } = require("../controllers/adminAcademicController");
 
 const router = express.Router();
 const id = (value) => mongoose.Types.ObjectId.isValid(value);
@@ -53,12 +54,14 @@ router.post("/pupils/:pupilId/profile", requireSchoolAuth, adminOnly, async (req
   } catch (error) { next(error); }
 });
 
+router.get("/teachers", requireSchoolAuth, adminOnly, getTeachers);
+router.patch("/teachers/:teacherId/code", requireSchoolAuth, adminOnly, setTeacherCode);
+router.patch("/subjects/:subjectId/teachers", requireSchoolAuth, adminOnly, allocateSubjectTeachers);
+
 router.get("/classes", requireSchoolAuth, adminOnly, async (req, res, next) => {
   try { return res.json({ success: true, classes: await SchoolClass.find({ isActive: true }).populate("classTeacher", "name email").sort({ name: 1, stream: 1 }).lean() }); } catch (error) { next(error); }
 });
-router.post("/classes", requireSchoolAuth, adminOnly, async (req, res, next) => {
-  try { const schoolClass = await SchoolClass.create(req.body); return res.status(201).json({ success: true, class: schoolClass }); } catch (error) { next(error); }
-});
+router.post("/classes", requireSchoolAuth, adminOnly, createClass);
 router.patch("/classes/:id", requireSchoolAuth, adminOnly, async (req, res, next) => {
   try { const schoolClass = await SchoolClass.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); if (!schoolClass) return res.status(404).json({ success: false, message: "Class not found" }); return res.json({ success: true, class: schoolClass }); } catch (error) { next(error); }
 });
