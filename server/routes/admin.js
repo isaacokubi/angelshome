@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const controller = require("../controllers/adminController");
+const settingsController = require("../controllers/settingsController");
 const unlinkedPupilsController = require("../controllers/adminUnlinkedPupils");
 const Announcement = require("../models/Announcement");
 const auth = require("../middleware/auth");
@@ -17,6 +18,9 @@ router.get("/unlinked-pupils", auth, admin, unlinkedPupilsController.getUnlinked
 router.get("/users", auth, admin, controller.getUsers);
 router.post("/announcement", auth, admin, controller.createAnnouncement);
 router.delete("/announcement/:id", auth, admin, controller.deleteAnnouncement);
+
+router.get("/settings", auth, admin, settingsController.getAdminSettings);
+router.put("/settings", auth, admin, settingsController.updateSettings);
 
 router.get("/announcements", async (req, res) => {
   try {
