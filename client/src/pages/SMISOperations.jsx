@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../services/api";
 import PortalShell from "../components/PortalShell";
 
@@ -19,14 +19,14 @@ export default function SMISOperations() {
   const [classForm, setClassForm] = useState({ name: "", stream: "", academicYear: "", capacity: 40 }); const [subjectForm, setSubjectForm] = useState({ name: "", code: "" });
   const [examForm, setExamForm] = useState({ name: "", type: "CAT", term: "Term 1", academicYear: "", startDate: "", endDate: "" });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
       const endpoint = { Pupils: "/smis/pupils", Classes: "/smis/classes", Subjects: "/smis/subjects", Attendance: "/smis/attendance", Exams: "/smis/exams", Results: "/smis/results" }[tab];
       const r = await apiRequest(endpoint); setData((d) => ({ ...d, pupils: r.pupils || d.pupils, classes: r.classes || d.classes, subjects: r.subjects || d.subjects, attendance: r.records || d.attendance, exams: r.exams || d.exams, results: r.results || d.results }));
     } catch (e) { setError(e.message || "Unable to load records."); } finally { setLoading(false); }
-  };
-  useEffect(() => { void load(); }, [tab]);
+  }, [tab]);
+  useEffect(() => { void load(); }, [load]);
   const filteredPupils = useMemo(() => data.pupils.filter((p) => `${p.name} ${p.email} ${p.profile?.admissionNumber || ""}`.toLowerCase().includes(query.toLowerCase())), [data.pupils, query]);
   const save = async (endpoint, body, success) => { setError(""); setNotice(""); try { await apiRequest(endpoint, { method: "POST", body }); setNotice(success); await load(); } catch (e) { setError(e.message || "Save failed."); } };
 
