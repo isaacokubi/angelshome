@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalShell from "./PortalShell";
 import AdminDashboard from "./AdminDashboard";
 import SponsorDashboard from "./SponsorDashboard";
 import SharedSchoolSnapshot from "./SharedSchoolSnapshot";
 import TimetablePanel from "./TimetablePanel";
-import { portalApi } from "../services/api";
+import { apiRequest, portalApi } from "../services/api";
 
 export default function PortalDashboard() {
   const [data, setData] = useState(null);
@@ -27,11 +27,129 @@ export default function PortalDashboard() {
   const role = data?.profile?.role || "pupil";
   return <PortalShell role={role}>
     {loading && !data && <div className="space-y-5"><div className="h-44 animate-pulse rounded-3xl bg-slate-200" /><div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((n) => <div key={n} className="h-32 animate-pulse rounded-2xl bg-slate-200" />)}</div></div>}
-    {error && !data && <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700"><p>{error}</p><button onClick={() => load(true)} className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-white">Try again</button></div>}
+    {error && !data && <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700"><p>{error}</p><button type="button" onClick={() => load(true)} className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-white">Try again</button></div>}
     {data && role === "admin" && <><AdminDashboard data={data} /><TimetablePanel role={role} /></>}
     {data && role === "sponsor" && <SponsorDashboard data={data} />}
-    {data && role !== "admin" && role !== "sponsor" && <StandardDashboard data={data} role={role} />}
+    {data && role === "teacher" && <TeacherDashboard data={data} />}
+    {data && role !== "admin" && role !== "sponsor" && role !== "teacher" && <StandardDashboard data={data} role={role} />}
   </PortalShell>;
+}
+
+function TeacherDashboard({ data }) {
+  const [learning, setLearning] = useState([]);
+  const [attendance, setAttendance] = useState({ records: [], summary: {} });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadTeacherWorkspace = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    const [learningResult, attendanceResult] = await Promise.allSettled([
+      apiRequest("/portal/learning"),
+      apiRequest("/portal/attendance"),
+    ]);
+    const failures = [];
+    if (learningResult.status === "fulfilled") setLearning(Array.isArray(learningResult.value?.records) ? learningResult.value.records : []);
+    else failures.push("learning records");
+    if (attendanceResult.status === "fulfilled") setAttendance({ records: attendanceResult.value?.records || [], summary: attendanceResult.value?.summary || {} });
+    else failures.push("attendance records");
+    if (failures.length) setError(`Some teacher workspace data could not be loaded: ${failures.join(" and ")}.`);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadTeacherWorkspace();
+  }, [loadTeacherWorkspace]);
+
+  const pupils = useMemo(() => {
+    const map = new Map();
+    learning.forEach((record) => {
+      const pupil = record.pupil;
+      if (pupil?._id && !map.has(pupil._id)) map.set(pupil._id, pupil);
+    });
+    return [...map.values()];
+  }, [learning]);
+
+  const subjects = useMemo(() => [...new Set(learning.map((record) => record.subject).filter(Boolean))], [learning]);
+  const progressValues = useMemo(() => learning.map((record) => Number(record.progress)).filter((value) => Number.isFinite(value)), [learning]);
+  const averageProgress = progressValues.length ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length) : null;
+  const upcomingLessons = useMemo(() => learning.filter((record) => record.nextLesson && new Date(record.nextLesson) >= new Date()).sort((a, b) => new Date(a.nextLesson) - new Date(b.nextLesson)).slice(0, 4), [learning]);
+  const recentResults = data?.results?.recent || [];
+  const totalAttendance = Object.values(attendance.summary || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+  const attendanceRate = totalAttendance ? Math.round(((Number(attendance.summary?.present || 0) + Number(attendance.summary?.late || 0)) / totalAttendance) * 100) : null;
+
+  return <div className="space-y-8">
+    <header className="rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 p-6 text-white shadow-xl md:p-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-300">Angels Home Education Centre</p>
+          <h2 className="mt-2 text-3xl font-black md:text-4xl">Teacher command centre</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100">A focused workspace for your assigned learning records, pupil progress, attendance, assessments and the school timetable.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={() => { void loadTeacherWorkspace(); }} disabled={loading} className="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold hover:bg-white/15 disabled:opacity-60">{loading ? "Refreshing…" : "Refresh workspace"}</button>
+          <Link to="/portal/teacher/classes" className="rounded-xl bg-amber-400 px-4 py-3 text-sm font-black text-blue-950 hover:bg-amber-300">Open my classes</Link>
+        </div>
+      </div>
+      <div className="mt-6 flex flex-wrap items-center gap-3 text-xs font-bold">
+        <span className="rounded-full bg-emerald-400/15 px-3 py-2 text-emerald-200">● Live school data</span>
+        <span className="rounded-full bg-white/10 px-3 py-2 text-blue-100">{pupils.length} assigned pupils in learning records</span>
+        <span className="rounded-full bg-white/10 px-3 py-2 text-blue-100">{subjects.length} active subjects</span>
+      </div>
+    </header>
+
+    {error && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">{error}</div>}
+
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Teacher workspace summary">
+      {[
+        ["Pupils", pupils.length, "Assigned learning records"],
+        ["Subjects", subjects.length, "Subjects with learning records"],
+        ["Progress", averageProgress == null ? "Not recorded" : `${averageProgress}%`, progressValues.length ? "Average recorded progress" : "Awaiting learning data"],
+        ["Attendance", attendanceRate == null ? "Not recorded" : `${attendanceRate}%`, totalAttendance ? `${totalAttendance} attendance records` : "Awaiting class register data"],
+      ].map(([label, value, note]) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">{label}</p><p className="mt-2 text-3xl font-black text-blue-950">{value}</p><p className="mt-1 text-xs font-medium text-slate-500">{note}</p></article>)}
+    </section>
+
+    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4" aria-label="Teacher quick actions">
+      {[
+        ["My Classes", "Review assigned pupils and learning records.", "/portal/teacher/classes", "Open workspace"],
+        ["Attendance", "Review attendance for your assigned classes.", "/portal/teacher/attendance", "View register"],
+        ["Results", "Review assessment records across the school.", "/portal/results", "View results"],
+        ["Timetable", "Check lessons and current school scheduling.", "/portal/timetable", "View timetable"],
+      ].map(([title, description, href, action]) => <article key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Teacher tools</p><h3 className="mt-2 text-lg font-black text-blue-950">{title}</h3><p className="mt-2 min-h-10 text-sm leading-5 text-slate-600">{description}</p><Link to={href} className="mt-4 inline-flex rounded-lg bg-blue-950 px-3 py-2 text-xs font-bold text-white hover:bg-blue-900">{action} →</Link></article>)}
+    </section>
+
+    <div className="grid gap-6 xl:grid-cols-3">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Teaching workload</p><h3 className="mt-1 text-xl font-black text-blue-950">Assigned learning records</h3><p className="mt-1 text-sm text-slate-500">Subjects and pupils currently associated with your teacher account.</p></div><Link to="/portal/teacher/classes" className="text-sm font-bold text-blue-700">View all</Link></div>
+        {loading ? <div className="mt-5 rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">Loading teaching records…</div> : learning.length ? <div className="mt-5 overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-3 py-3">Subject</th><th className="px-3 py-3">Pupil</th><th className="px-3 py-3">Progress</th><th className="px-3 py-3">Next lesson</th></tr></thead><tbody>{learning.slice(0, 8).map((record) => <tr key={record._id} className="border-b border-slate-100 last:border-0"><td className="px-3 py-3 font-bold text-blue-950">{record.subject || "Subject"}</td><td className="px-3 py-3 text-slate-700">{record.pupil?.name || "Pupil"}</td><td className="px-3 py-3">{record.progress == null ? <span className="text-slate-400">Not recorded</span> : <div className="min-w-28"><div className="flex justify-between text-xs font-bold"><span>{record.progress}%</span><span className="text-slate-400">progress</span></div><div className="mt-1 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-amber-400" style={{ width: `${Math.min(100, Math.max(0, Number(record.progress) || 0))}%` }} /></div></div>}</td><td className="px-3 py-3 text-slate-500">{record.nextLesson ? new Date(record.nextLesson).toLocaleString() : "Not scheduled"}</td></tr>)}</tbody></table></div> : <div className="mt-5 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No learning records are assigned to your account yet.</div>}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Next up</p><h3 className="mt-1 text-xl font-black text-blue-950">Upcoming lessons</h3></div><Link to="/portal/timetable" className="text-sm font-bold text-blue-700">Timetable</Link></div>
+        <div className="mt-5 space-y-3">{upcomingLessons.length ? upcomingLessons.map((record) => <div key={`${record._id}-lesson`} className="rounded-xl bg-slate-50 p-4"><p className="font-bold text-blue-950">{record.subject || "Lesson"}</p><p className="mt-1 text-xs font-semibold text-slate-500">{record.pupil?.name || "Assigned pupil"}</p><p className="mt-2 text-xs text-slate-600">{new Date(record.nextLesson).toLocaleString()}</p></div>) : <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">No upcoming lessons are recorded in your learning data.</div>}</div>
+      </section>
+    </div>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Class register</p><h3 className="mt-1 text-xl font-black text-blue-950">Attendance overview</h3></div><Link to="/portal/teacher/attendance" className="text-sm font-bold text-blue-700">Open attendance</Link></div>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{[["Present", attendance.summary?.present || 0], ["Late", attendance.summary?.late || 0], ["Absent", attendance.summary?.absent || 0], ["Sick", attendance.summary?.sick || 0]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-400">{label}</p><p className="mt-1 text-2xl font-black text-blue-950">{value}</p></div>)}</div>
+        <p className="mt-4 text-sm text-slate-500">Attendance is restricted by the school system to classes where you are assigned as class teacher.</p>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">Assessment activity</p><h3 className="mt-1 text-xl font-black text-blue-950">Recent results</h3></div><Link to="/portal/results" className="text-sm font-bold text-blue-700">View all</Link></div>
+        <div className="mt-5 space-y-3">{recentResults.length ? recentResults.map((item) => <div key={item._id} className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-4"><div className="min-w-0"><p className="truncate font-bold text-slate-800">{item.subject?.name || "Subject"}</p><p className="mt-1 truncate text-xs text-slate-500">{item.pupil?.name || "Pupil"} · {item.exam?.name || "Examination"}</p></div><div className="shrink-0 text-right"><p className="font-black text-blue-950">{item.marks}/{item.maxMarks}</p><p className="text-xs font-bold text-amber-700">{item.grade || "—"}</p></div></div>) : <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No examination results have been recorded yet.</div>}</div>
+      </section>
+    </div>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold uppercase tracking-widest text-amber-600">School communications</p><h3 className="mt-1 text-xl font-black text-blue-950">Recent notifications</h3><p className="mt-1 text-sm text-slate-500">Important school messages delivered to your teacher account.</p></div><Link to="/portal/notifications" className="text-sm font-bold text-blue-700">View all notifications</Link></div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">{data.notifications?.length ? data.notifications.slice(0, 4).map((item) => <article key={item._id} className="rounded-xl bg-slate-50 p-4"><p className="font-bold text-slate-800">{item.title}</p><p className="mt-1 text-sm leading-5 text-slate-600">{item.message}</p><p className="mt-2 text-xs text-slate-400">{new Date(item.createdAt).toLocaleString()}</p></article>) : <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 md:col-span-2">No school activity has been published for your account.</div>}</div>
+    </section>
+
+    <TimetablePanel role="teacher" />
+  </div>;
 }
 
 function StandardDashboard({ data, role }) {
