@@ -5,18 +5,24 @@ const User = require("../models/User");
 const { requireSchoolAuth } = require("../middleware/schoolAuth");
 
 const router = express.Router();
+const normalizePhone = (value) => String(value || "").replace(/[\s()-]/g, "").trim();
+const validPhone = (value) => /^\+?[0-9]{9,15}$/.test(value);
 const signToken = (user) => jwt.sign({ sub: user._id.toString(), role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
-const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone });
+const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, parentPhone: u.parentPhone });
 
 router.post("/register", async (req, res, next) => {
   try {
-    const { name, email, password, role = "pupil", phone } = req.body || {};
+    const { name, email, password, role = "pupil" } = req.body || {};
+    const phone = normalizePhone(req.body?.phone);
+    const parentPhone = normalizePhone(req.body?.parentPhone);
     if (!name || !validator.isEmail(String(email || "")) || typeof password !== "string" || password.length < 8) return res.status(400).json({ success: false, message: "Name, valid email and password of at least 8 characters are required" });
     if (!["pupil", "teacher", "sponsor", "parent"].includes(role)) return res.status(400).json({ success: false, message: "Invalid self-registration role" });
+    if (!validPhone(phone)) return res.status(400).json({ success: false, message: "A valid phone number is required" });
+    if (role === "pupil" && !validPhone(parentPhone)) return res.status(400).json({ success: false, message: "A valid parent or guardian phone number is required for pupil registration" });
     const normalizedEmail = email.toLowerCase().trim();
     if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ success: false, message: "An account with this email already exists" });
     const passwordHash = await User.hashPassword(password);
-    const user = await User.create({ name: name.trim(), email: normalizedEmail, passwordHash, role, phone });
+    const user = await User.create({ name: name.trim(), email: normalizedEmail, passwordHash, role, phone, ...(role === "pupil" ? { parentPhone } : {}) });
     return res.status(201).json({ success: true, token: signToken(user), user: publicUser(user) });
   } catch (error) { next(error); }
 });
