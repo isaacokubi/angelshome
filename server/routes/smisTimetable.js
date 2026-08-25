@@ -1,8 +1,14 @@
-import express from 'express';
-import { listTimetable, createTimetable, deleteTimetable } from '../controllers/smisTimetableController.js';
+const express = require('express');
+const { requireSchoolAuth, requireSchoolRole } = require('../middleware/schoolAuth');
+const { listTimetable, createTimetable, updateTimetable, deleteTimetable } = require('../controllers/smisTimetableController');
 
 const router = express.Router();
-router.get('/', listTimetable);
-router.post('/', createTimetable);
-router.delete('/:id', deleteTimetable);
-export default router;
+const staff = requireSchoolRole('admin', 'teacher');
+const adminOnly = requireSchoolRole('admin');
+
+router.get('/', requireSchoolAuth, listTimetable);
+router.post('/', requireSchoolAuth, adminOnly, createTimetable);
+router.patch('/:id', requireSchoolAuth, adminOnly, updateTimetable);
+router.delete('/:id', requireSchoolAuth, adminOnly, deleteTimetable);
+
+module.exports = router;
