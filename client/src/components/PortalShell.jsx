@@ -6,6 +6,7 @@ export default function PortalShell({ role, children }) {
   const location = useLocation(); const navigate = useNavigate();
   const links = [
     ["Dashboard", `/portal/${role}`],
+    ["Results", "/portal/results"],
     ...(role === "admin" ? [["Pupils", "/portal/admin/pupils"], ["Teachers", "/portal/admin/teachers"], ["Parents", "/portal/admin/parents"], ["Sponsors", "/portal/admin/sponsors"], ["Relationships", "/portal/admin/relationships"], ["Attendance", "/portal/admin/attendance"], ["Timetable", "/admin/smis/timetable"]] : []),
     ...(role === "teacher" ? [["My Classes", "/portal/teacher/classes"], ["Attendance", "/portal/teacher/attendance"], ["Timetable", "/portal/timetable"]] : []),
     ...(role === "pupil" ? [["My Learning", "/portal/pupil/learning"], ["Attendance", "/portal/pupil/attendance"], ["Timetable", "/portal/timetable"]] : []),
