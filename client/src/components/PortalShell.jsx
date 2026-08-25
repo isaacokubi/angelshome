@@ -6,11 +6,11 @@ export default function PortalShell({ role, children }) {
   const location = useLocation(); const navigate = useNavigate();
   const links = [
     ["Dashboard", `/portal/${role}`],
-    ...(role === "admin" ? [["Pupils", "/portal/admin/pupils"], ["Teachers", "/portal/admin/teachers"], ["Parents", "/portal/admin/parents"], ["Sponsors", "/portal/admin/sponsors"], ["Relationships", "/portal/admin/relationships"]] : []),
-    ...(role === "teacher" ? [["My Classes", "/portal/teacher/classes"]] : []),
-    ...(role === "pupil" ? [["My Learning", "/portal/pupil/learning"]] : []),
-    ...(role === "sponsor" ? [["Impact", "/portal/sponsor/impact"]] : []),
-    ...(role === "parent" ? [["My Children", "/portal/parent#children"], ["School Updates", "/portal/notifications"]] : [["Notifications", "/portal/notifications"]]),
+    ...(role === "admin" ? [["Pupils", "/portal/admin/pupils"], ["Teachers", "/portal/admin/teachers"], ["Parents", "/portal/admin/parents"], ["Sponsors", "/portal/admin/sponsors"], ["Relationships", "/portal/admin/relationships"], ["Attendance", "/portal/admin/attendance"], ["Timetable", "/admin/smis/timetable"]] : []),
+    ...(role === "teacher" ? [["My Classes", "/portal/teacher/classes"], ["Attendance", "/portal/teacher/attendance"], ["Timetable", "/portal/timetable"]] : []),
+    ...(role === "pupil" ? [["My Learning", "/portal/pupil/learning"], ["Attendance", "/portal/pupil/attendance"], ["Timetable", "/portal/timetable"]] : []),
+    ...(role === "sponsor" ? [["Impact", "/portal/sponsor/impact"], ["Attendance", "/portal/sponsor/attendance"], ["Timetable", "/portal/timetable"]] : []),
+    ...(role === "parent" ? [["My Children", "/portal/parent#children"], ["Attendance", "/portal/parent/attendance"], ["Timetable", "/portal/timetable"], ["School Updates", "/portal/notifications"]] : [["Notifications", "/portal/notifications"]]),
   ];
   const logout = () => { localStorage.removeItem("angelshome_token"); localStorage.removeItem("angelshome_session"); navigate("/login", { replace: true }); };
   const isActive = (href) => href.split("#")[0] === location.pathname;
