@@ -4,7 +4,7 @@ const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const SchoolClass = require("../models/SchoolClass");
 const Subject = require("../models/Subject");
 const User = require("../models/User");
-const { getTimetableConfig, generateTimetable, lockTimetable, unlockTimetable, createTimetable, updateTimetable, deleteTimetable } = require("../controllers/smisTimetableGenerationControllerV2");
+const { getTimetableConfig, saveTimetableConfig, generateTimetable, lockTimetable, unlockTimetable, createTimetable, updateTimetable, deleteTimetable } = require("../controllers/smisTimetableGenerationControllerV3");
 const { listScopedTimetable } = require("../controllers/scopedTimetableController");
 
 const router = express.Router();
@@ -12,6 +12,7 @@ const adminOnly = requireSchoolRole("admin");
 
 router.get("/", requireSchoolAuth, listScopedTimetable);
 router.get("/config", requireSchoolAuth, adminOnly, getTimetableConfig);
+router.post("/config", requireSchoolAuth, adminOnly, saveTimetableConfig);
 router.post("/generate", requireSchoolAuth, adminOnly, generateTimetable);
 router.post("/lock", requireSchoolAuth, adminOnly, lockTimetable);
 router.post("/unlock", requireSchoolAuth, adminOnly, unlockTimetable);
