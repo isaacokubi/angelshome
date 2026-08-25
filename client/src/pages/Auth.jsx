@@ -55,7 +55,7 @@ export function Register() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const initialRole = ["pupil", "parent", "teacher", "sponsor"].includes(params.get("role")) ? params.get("role") : "pupil";
-  const [form, setForm] = useState({ name: "", email: "", phone: "", parentPhone: "", password: "", role: initialRole });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", parentPhone: "", childEmail: "", password: "", role: initialRole });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -80,6 +80,10 @@ export function Register() {
       setError("Pupils must provide a valid parent or guardian phone number.");
       return;
     }
+    if (form.role === "parent" && !form.childEmail.trim()) {
+      setError("Enter the email address of your registered pupil so the school can verify your parent account.");
+      return;
+    }
     setLoading(true);
     try {
       const payload = {
@@ -89,6 +93,7 @@ export function Register() {
         role: form.role,
         phone,
         ...(form.role === "pupil" ? { parentPhone } : {}),
+        ...(form.role === "parent" ? { childEmail: form.childEmail.trim() } : {}),
       };
       const result = await authApi.register(payload);
       localStorage.setItem("angelshome_token", result.token);
@@ -115,11 +120,20 @@ export function Register() {
             <p className="mt-2 text-xs leading-5 text-slate-500">A parent or guardian contact is required so the school can link and reach your family account.</p>
           </div>
         )}
+        {form.role === "parent" && (
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-sm font-black text-blue-950">Parent account verification</p>
+            <p className="mt-1 text-xs leading-5 text-blue-800">For school security, parent accounts can only be created for a pupil who is already registered. Enter the pupil's registered email and use the parent/guardian phone number recorded for that pupil.</p>
+            <div className="mt-4">
+              <Field label="Registered pupil email" type="email" value={form.childEmail} onChange={(v) => update("childEmail", v)} required autoComplete="off" placeholder="pupil@example.com" disabled={loading} />
+            </div>
+          </div>
+        )}
         <div>
           <label htmlFor="portal-role" className="mb-2 block text-sm font-bold text-slate-700">Portal role</label>
           <select id="portal-role" value={form.role} onChange={(e) => update("role", e.target.value)} disabled={loading} className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50">
             <option value="pupil">Pupil</option>
-            <option value="parent">Parent</option>
+            <option value="parent">Parent / Guardian</option>
             <option value="teacher">Teacher</option>
             <option value="sponsor">Sponsor</option>
           </select>
@@ -131,7 +145,7 @@ export function Register() {
             <button type="button" onClick={() => setShowPassword((value) => !value)} disabled={loading} className="text-xs font-bold text-blue-700 disabled:opacity-50">{showPassword ? "Hide" : "Show"}</button>
           </div>
         </div>
-        <button type="submit" disabled={loading || !form.name.trim() || !form.email.trim() || !form.phone.trim() || (form.role === "pupil" && !form.parentPhone.trim()) || form.password.length < 8} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-950 px-5 py-3.5 font-black text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60">
+        <button type="submit" disabled={loading || !form.name.trim() || !form.email.trim() || !form.phone.trim() || (form.role === "pupil" && !form.parentPhone.trim()) || (form.role === "parent" && !form.childEmail.trim()) || form.password.length < 8} className="flex w-full items-center justify-center gap-3 rounded-xl bg-blue-950 px-5 py-3.5 font-black text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60">
           {loading ? <><Spinner /> Creating your account…</> : "Create account"}
         </button>
         <p className="text-center text-sm text-slate-600">Already registered? <Link className="font-bold text-blue-700 hover:text-blue-900" to="/login">Sign in</Link></p>
