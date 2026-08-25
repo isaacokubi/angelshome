@@ -14,6 +14,17 @@ async function pupilClassIds(pupilIds) {
   return [...new Set(profiles.map((profile) => String(profile.schoolClass)).filter(Boolean))];
 }
 
+async function teacherClassIds(teacherId) {
+  const [classTeacherClasses, taughtClasses] = await Promise.all([
+    SchoolClass.find({ classTeacher: teacherId, isActive: true }).select('_id').lean(),
+    Timetable.distinct('schoolClass', { teacher: teacherId, isActive: true }),
+  ]);
+  return [...new Set([
+    ...classTeacherClasses.map((schoolClass) => String(schoolClass._id)),
+    ...taughtClasses.map((schoolClass) => String(schoolClass)),
+  ])];
+}
+
 async function allowedClassIdsForUser(user) {
   if (user.role === 'pupil') return pupilClassIds([user._id]);
 
@@ -22,10 +33,7 @@ async function allowedClassIdsForUser(user) {
     return pupilClassIds(pupilIds);
   }
 
-  if (user.role === 'teacher') {
-    const classes = await SchoolClass.find({ classTeacher: user._id, isActive: true }).select('_id').lean();
-    return classes.map((schoolClass) => String(schoolClass._id));
-  }
+  if (user.role === 'teacher') return teacherClassIds(user._id);
 
   return [];
 }
@@ -43,13 +51,7 @@ const listScopedTimetable = async (req, res) => {
       if (req.query.schoolClass) filter.schoolClass = req.query.schoolClass;
       if (req.query.stream) filter.stream = req.query.stream;
       if (req.query.teacher) filter.teacher = req.query.teacher;
-    } else if (user.role === 'teacher') {
-      const classIds = await allowedClassIdsForUser(user);
-      filter.$or = [
-        ...(classIds.length ? [{ schoolClass: { $in: classIds } }] : []),
-        { teacher: user._id },
-      ];
-    } else if (['pupil', 'parent', 'sponsor'].includes(user.role)) {
+    } else if (['teacher', 'pupil', 'parent', 'sponsor'].includes(user.role)) {
       const classIds = await allowedClassIdsForUser(user);
       filter.schoolClass = { $in: classIds };
     } else {
