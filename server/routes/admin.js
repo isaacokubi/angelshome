@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const controller = require("../controllers/adminController");
+const unlinkedPupilsController = require("../controllers/adminUnlinkedPupils");
 const Announcement = require("../models/Announcement");
 const auth = require("../middleware/auth");
 const admin = require("../middleware/adminMiddleware");
@@ -12,6 +13,7 @@ router.post("/login", controller.login);
 // create-admin script with deployment secrets instead of exposing registration.
 
 router.get("/dashboard", auth, admin, controller.dashboard);
+router.get("/unlinked-pupils", auth, admin, unlinkedPupilsController.getUnlinkedPupils);
 router.get("/users", auth, admin, controller.getUsers);
 router.post("/announcement", auth, admin, controller.createAnnouncement);
 router.delete("/announcement/:id", auth, admin, controller.deleteAnnouncement);
