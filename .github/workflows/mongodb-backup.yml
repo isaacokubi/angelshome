@@ -2,15 +2,32 @@ name: MongoDB Backup
 
 on:
   schedule:
-    - cron: "17 1 * * *"
+    - cron: "17 1 * * *" # daily
+    - cron: "37 1 * * 0" # weekly
+    - cron: "47 1 1 * *" # monthly
   workflow_dispatch:
+    inputs:
+      tier:
+        description: Backup retention tier
+        required: true
+        type: choice
+        default: daily
+        options:
+          - daily
+          - weekly
+          - monthly
 
 permissions:
   contents: read
+  issues: write
 
 env:
   MONGO_URI: ${{ secrets.MONGO_URI }}
   BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
 
 jobs:
   backup:
@@ -25,20 +42,132 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mongodb-database-tools
 
+      - name: Determine backup tier
+        id: tier
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tier="${{ inputs.tier }}"
+          elif [[ "${{ github.event.schedule }}" == "37 1 * * 0" ]]; then
+            tier="weekly"
+          elif [[ "${{ github.event.schedule }}" == "47 1 1 * *" ]]; then
+            tier="monthly"
+          else
+            tier="daily"
+          fi
+          case "$tier" in
+            daily) retention=14 ;;
+            weekly) retention=56 ;;
+            monthly) retention=365 ;;
+            *) echo "Invalid tier: $tier" >&2; exit 1 ;;
+          esac
+          echo "tier=$tier" >> "$GITHUB_OUTPUT"
+          echo "retention=$retention" >> "$GITHUB_OUTPUT"
+          echo "backup_name=angels-home-mongodb-${tier}-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
       - name: Create encrypted backup
         shell: bash
         run: |
           set -euo pipefail
           test -n "$MONGO_URI"
           test -n "$BACKUP_ENCRYPTION_KEY"
+          umask 077
           mkdir -p backup
           mongodump --uri "$MONGO_URI" --archive=backup/angels-home.archive.gz --gzip
+          test -s backup/angels-home.archive.gz
           openssl enc -aes-256-cbc -pbkdf2 -salt -in backup/angels-home.archive.gz -out backup/angels-home.archive.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
           rm -f backup/angels-home.archive.gz
+          test -s backup/angels-home.archive.gz.enc
 
-      - name: Upload encrypted backup artifact
-        uses: actions/upload-artifact@v4
+      - name: Verify encrypted backup integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          openssl enc -d -aes-256-cbc -pbkdf2 -in backup/angels-home.archive.gz.enc -out backup/verify.archive.gz -pass env:BACKUP_ENCRYPTION_KEY
+          test -s backup/verify.archive.gz
+          mongorestore --dryRun --archive=backup/verify.archive.gz --gzip --verbose
+          rm -f backup/verify.archive.gz
+
+      - name: Upload daily backup artifact
+        if: steps.tier.outputs.tier == 'daily'
+        uses: actions/upload-artifact@v6
         with:
-          name: angels-home-mongodb-backup-${{ github.run_id }}
+          name: ${{ steps.tier.outputs.backup_name }}
           path: backup/angels-home.archive.gz.enc
           retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload weekly backup artifact
+        if: steps.tier.outputs.tier == 'weekly'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.tier.outputs.backup_name }}
+          path: backup/angels-home.archive.gz.enc
+          retention-days: 56
+          if-no-files-found: error
+
+      - name: Upload monthly backup artifact
+        if: steps.tier.outputs.tier == 'monthly'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.tier.outputs.backup_name }}
+          path: backup/angels-home.archive.gz.enc
+          retention-days: 365
+          if-no-files-found: error
+
+      - name: Upload encrypted backup to independent S3 storage
+        if: ${{ env.BACKUP_S3_BUCKET != '' && env.AWS_ACCESS_KEY_ID != '' && env.AWS_SECRET_ACCESS_KEY != '' && env.AWS_REGION != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y awscli
+          aws s3 cp backup/angels-home.archive.gz.enc "s3://${BACKUP_S3_BUCKET}/angels-home/${{ steps.tier.outputs.tier }}/$(date -u +%Y/%m/%d)/angels-home-${GITHUB_RUN_ID}.archive.gz.enc" --sse AES256
+
+      - name: Create backup manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum backup/angels-home.archive.gz.enc > backup/SHA256SUMS.txt
+          printf 'tier=%s\nretention_days=%s\nrun_id=%s\ncommit=%s\n' "${{ steps.tier.outputs.tier }}" "${{ steps.tier.outputs.retention }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" > backup/MANIFEST.txt
+
+      - name: Upload backup manifest
+        uses: actions/upload-artifact@v6
+        with:
+          name: angels-home-mongodb-manifest-${{ github.run_id }}
+          path: |
+            backup/MANIFEST.txt
+            backup/SHA256SUMS.txt
+          retention-days: 365
+          if-no-files-found: error
+
+      - name: Notify GitHub on backup failure
+        if: ${{ failure() }}
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const title = `[Backup Failure] MongoDB backup run ${context.runId}`;
+            const body = [
+              'The MongoDB backup workflow failed.',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `Commit: ${context.sha}`,
+              `Event: ${context.eventName}`,
+              '',
+              'Review the failed job logs and backup configuration.'
+            ].join('\n');
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 20
+            });
+            if (!existing.data.some(issue => issue.title === title)) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+            }
