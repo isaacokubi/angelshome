@@ -7,7 +7,7 @@ export default function PortalShell({ role, children }) {
   const links = [
     ["Dashboard", `/portal/${role}`],
     ["Results", "/portal/results"],
-    ...(role === "admin" ? [["Pupils", "/portal/admin/pupils"], ["Teachers", "/portal/admin/teachers"], ["Parents", "/portal/admin/parents"], ["Sponsors", "/portal/admin/sponsors"], ["Relationships", "/portal/admin/relationships"], ["Attendance", "/portal/admin/attendance"], ["Timetable", "/admin/smis/timetable"]] : []),
+    ...(role === "admin" ? [["Pupils", "/portal/admin/pupils"], ["Teachers", "/portal/admin/teachers"], ["Parents", "/portal/admin/parents"], ["Sponsors", "/portal/admin/sponsors"], ["Relationships", "/portal/admin/relationships"], ["Attendance", "/portal/admin/attendance"], ["Timetable", "/admin/smis/timetable"], ["Operations Centre", "/admin/smis/operations-centre"]] : []),
     ...(role === "teacher" ? [["My Classes", "/portal/teacher/classes"], ["Attendance", "/portal/teacher/attendance"], ["Timetable", "/portal/timetable"]] : []),
     ...(role === "pupil" ? [["My Learning", "/portal/pupil/learning"], ["Attendance", "/portal/pupil/attendance"], ["Timetable", "/portal/timetable"]] : []),
     ...(role === "sponsor" ? [["Impact", "/portal/sponsor/impact"], ["Attendance", "/portal/sponsor/attendance"], ["Timetable", "/portal/timetable"]] : []),
