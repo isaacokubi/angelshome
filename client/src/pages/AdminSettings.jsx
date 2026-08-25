@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { settingsApi } from "../services/settingsApi";
-import { defaults } from "../context/SchoolSettingsContext";
+import { defaults, useSchoolSettings } from "../context/SchoolSettingsContext";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const merge = (base, value) => {
@@ -25,12 +25,22 @@ function JsonEditor({ title, description, value, onChange }) {
 }
 
 export default function AdminSettings() {
+  const { refresh: refreshGlobalSettings } = useSchoolSettings();
   const [settings, setSettings] = useState(clone(defaults));
   const [tab, setTab] = useState("school");
   const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState("");
   useEffect(() => { settingsApi.get().then((payload) => setSettings(merge(defaults, payload?.data))).catch((err) => setError(err.message)).finally(() => setLoading(false)); }, []);
   const updateSection = (section, value) => setSettings((current) => ({ ...current, [section]: value }));
-  async function save() { setSaving(true); setMessage(""); setError(""); try { const result = await settingsApi.update(settings); setSettings(merge(defaults, result?.data)); setMessage("Saved successfully. Changes are now available to the public site and portal branding."); } catch (err) { setError(err.message); } finally { setSaving(false); } }
+  async function save() {
+    setSaving(true); setMessage(""); setError("");
+    try {
+      const result = await settingsApi.update(settings);
+      const savedSettings = merge(defaults, result?.data);
+      setSettings(savedSettings);
+      await refreshGlobalSettings();
+      setMessage("Saved successfully. Changes are now live across the public website and portal branding.");
+    } catch (err) { setError(err.message); } finally { setSaving(false); }
+  }
   if (loading) return <div className="rounded-2xl bg-white p-8 shadow-sm">Loading school settings…</div>;
   const tabs = [["school", "School & contact"], ["homepage", "Homepage"], ["about", "About"], ["academics", "Academics"], ["support", "Support"]];
   return <div className="mx-auto max-w-6xl space-y-6">
