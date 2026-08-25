@@ -7,6 +7,8 @@ const cards = [["Pupils","pupils","/portal/admin/pupils"],["Parents","parents","
 export default function SMISDashboard() {
   const [data,setData]=useState(null); const [error,setError]=useState(""); const [refreshing,setRefreshing]=useState(false);
   const load=useCallback(async(silent=false)=>{setError("");if(silent)setRefreshing(true);try{setData((await apiRequest("/smis/dashboard"))?.stats||null);}catch(e){setError(e.message||"Unable to load the SMIS dashboard.");}finally{if(silent)setRefreshing(false);}},[]);
+  // The initial request intentionally updates local state from an external API subscription.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(()=>{void load();},[load]);
   if(!data&&!error)return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-7xl animate-pulse"><div className="h-40 rounded-3xl bg-slate-200"/></div></div>;
   if(error)return <div className="min-h-screen bg-slate-50 p-8"><div className="mx-auto max-w-2xl rounded-3xl border border-red-200 bg-white p-8"><h1 className="text-2xl font-black text-blue-950">SMIS unavailable</h1><p className="mt-3 text-sm text-red-600">{error}</p><button onClick={()=>load()} className="mt-6 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white">Try again</button></div></div>;
