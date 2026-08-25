@@ -25,6 +25,9 @@ const schema = new mongoose.Schema({
   generatedAt: { type: Date },
   generatedCount: { type: Number, default: 0 },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  locked: { type: Boolean, default: false, index: true },
+  lockedAt: { type: Date },
+  lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 }, { timestamps: true });
 
 schema.index({ academicYear: 1, term: 1 }, { unique: true });
