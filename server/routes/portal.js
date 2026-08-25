@@ -59,6 +59,28 @@ async function resultSnapshot(user) {
   return { count, subjects: totals.subjects.length, average: totals.totalMaxMarks ? Math.round((totals.totalMarks / totals.totalMaxMarks) * 100) : null, recent };
 }
 
+async function pupilLiveSnapshot(userId, academic, results) {
+  const [learning, attendance] = await Promise.all([
+    LearningRecord.find({ pupil: userId }).select("subject progress nextLesson").sort({ subject: 1 }).lean(),
+    Attendance.find({ pupil: userId }).select("date status").sort({ date: -1 }).lean(),
+  ]);
+  const attendanceTotal = attendance.length;
+  const attendancePresent = attendance.filter((record) => ["present", "late"].includes(record.status)).length;
+  const attendanceRate = attendanceTotal ? Math.round((attendancePresent / attendanceTotal) * 100) : academic?.attendanceRate ?? null;
+  const subjectsCount = learning.length || academic?.subjectsCount || results.subjects || null;
+  const average = results.average ?? academic?.averageScore ?? null;
+  const progressValues = learning.map((record) => Number(record.progress)).filter((value) => Number.isFinite(value));
+  const averageProgress = progressValues.length ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length) : null;
+  return {
+    attendanceRate,
+    subjectsCount,
+    average,
+    averageProgress,
+    attendanceRecorded: attendanceTotal,
+    learningRecords: learning,
+  };
+}
+
 router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
   try {
     const user = req.schoolUser;
@@ -72,12 +94,13 @@ router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
     let children = [], sponsoredPupils = [];
     if (user.role === "parent") children = await buildPupilSummaries(user.children || []);
     if (user.role === "sponsor") sponsoredPupils = await buildPupilSummaries(user.sponsoredPupils || []);
+    const pupilLive = user.role === "pupil" ? await pupilLiveSnapshot(user._id, academic, results) : null;
     let stats;
     if (user.role === "pupil") stats = [
-      { label: "Attendance", value: academic?.attendanceRate == null ? "Not recorded" : `${academic.attendanceRate}%`, note: academic?.attendanceRate == null ? "Awaiting school records" : "Recorded in school system" },
-      { label: "Subjects", value: formatStat(academic?.subjectsCount), note: academic?.subjectsCount == null ? "Awaiting enrolment data" : "Current academic record" },
+      { label: "Attendance", value: pupilLive.attendanceRate == null ? "Not recorded" : `${pupilLive.attendanceRate}%`, note: pupilLive.attendanceRecorded ? `${pupilLive.attendanceRecorded} attendance record${pupilLive.attendanceRecorded === 1 ? "" : "s"}` : "Awaiting school records" },
+      { label: "Subjects", value: formatStat(pupilLive.subjectsCount), note: pupilLive.subjectsCount == null ? "Awaiting enrolment data" : "Current learning records" },
       { label: "Results", value: results.count, note: results.count ? `${results.average}% average` : "Awaiting assessment data" },
-      { label: "Average", value: results.average == null ? "Not recorded" : `${results.average}%`, note: results.average == null ? "Awaiting assessment data" : "Live exam results" },
+      { label: "Average", value: pupilLive.average == null ? "Not recorded" : `${pupilLive.average}%`, note: pupilLive.average == null ? "Awaiting assessment data" : "Live exam results" },
     ];
     else if (user.role === "teacher") stats = [
       { label: "Pupils", value: school.pupils, note: "Active school pupils" }, { label: "Classes", value: school.classes, note: "Active classes" }, { label: "Results", value: results.count, note: "Results in school records" }, { label: "Unread", value: unreadNotifications, note: "Portal notifications" },
@@ -91,7 +114,7 @@ router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
     else stats = [
       { label: "Pupils", value: school.pupils, note: "Active accounts" }, { label: "Teachers", value: school.teachers, note: "Active accounts" }, { label: "Results", value: school.totalResults, note: `${school.resultsEnteredToday} entered today` }, { label: "Open exams", value: school.openExams, note: "Currently open" },
     ];
-    return res.json({ success: true, profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, roleLabel: roleLabels[user.role] || user.role }, stats, school, results, notifications, unreadNotifications, children, sponsoredPupils });
+    return res.json({ success: true, profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, roleLabel: roleLabels[user.role] || user.role }, stats, school, results, notifications, unreadNotifications, children, sponsoredPupils, pupilLive });
   } catch (error) { next(error); }
 });
 
