@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import LessonAlertMonitor from "./LessonAlertMonitor";
 
 const roleLabels = { admin: "Administrator", teacher: "Teacher", pupil: "Pupil", sponsor: "Sponsor", parent: "Parent" };
 
@@ -23,6 +24,7 @@ export default function PortalShell({ role, children }) {
   const isActive = (href) => { const path = href.split("#")[0]; if (path === "/portal/notifications") return location.pathname === path; return location.pathname === path; };
 
   return <div className="min-h-screen bg-slate-50 text-slate-900">
+    <LessonAlertMonitor role={role} />
     <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white lg:flex lg:flex-col">
       <div className="border-b border-slate-100 px-6 py-6"><Link to="/" className="text-xl font-black tracking-tight text-blue-950">Angels Home</Link><p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Education Centre</p><div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-950 text-xs font-black text-white">{(roleLabels[role] || "P").slice(0, 1)}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">{roleLabels[role] || "Portal"}</p><p className="text-[11px] text-slate-500">Secure school access</p></div></div></div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Portal navigation">{links.map(([label, href]) => <Link key={`${label}-${href}`} to={href} className={`group flex items-center justify-between rounded-xl px-4 py-3 text-sm font-semibold transition ${isActive(href) ? "bg-blue-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-blue-950"}`}><span>{label}</span>{label === "Timetable" && <span className={`text-base ${isActive(href) ? "opacity-100" : "opacity-50 group-hover:opacity-100"}`} aria-hidden="true">▦</span>}</Link>)}</nav>
