@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const validator = require("validator");
 const User = require("../models/User");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
+const { authLimiter } = require("../middleware/security");
 
 const router = express.Router();
 const normalizePhone = (value) => String(value || "").replace(/[\s()-]/g, "").trim();
@@ -11,7 +12,7 @@ const validPhone = (value) => /^\+?[0-9]{9,15}$/.test(value);
 const signToken = (user) => jwt.sign({ sub: user._id.toString(), role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
 const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, parentPhone: u.parentPhone });
 
-router.post("/register", async (req, res, next) => {
+router.post("/register", authLimiter, async (req, res, next) => {
   try {
     const { name, email, password, role = "pupil" } = req.body || {};
     const phone = normalizePhone(req.body?.phone);
@@ -40,7 +41,7 @@ router.post("/register", async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post("/login", async (req, res, next) => {
+router.post("/login", authLimiter, async (req, res, next) => {
   try {
     const email = String(req.body?.email || "").toLowerCase().trim(); const password = String(req.body?.password || "");
     const user = await User.findOne({ email }).select("+passwordHash");

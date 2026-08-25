@@ -1,0 +1,44 @@
+name: MongoDB Backup
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MONGO_URI: ${{ secrets.MONGO_URI }}
+  BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install MongoDB Database Tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] http://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+
+      - name: Create encrypted backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$MONGO_URI"
+          test -n "$BACKUP_ENCRYPTION_KEY"
+          mkdir -p backup
+          mongodump --uri "$MONGO_URI" --archive=backup/angels-home.archive.gz --gzip
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in backup/angels-home.archive.gz -out backup/angels-home.archive.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
+          rm -f backup/angels-home.archive.gz
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: angels-home-mongodb-backup-${{ github.run_id }}
+          path: backup/angels-home.archive.gz.enc
+          retention-days: 14

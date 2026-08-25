@@ -41,3 +41,10 @@ jobs:
         run: |
           set -euo pipefail
           find . -type f -name '*.js' -not -path './node_modules/*' -print0 | xargs -0 -n1 node --check
+      - name: Production environment contract check
+        env:
+          NODE_ENV: production
+          JWT_SECRET: ci-only-not-a-real-secret-32-characters-long
+          MONGO_URI: mongodb://ci.invalid/angels_home
+          CLIENT_ORIGINS: https://example.com
+        run: npm run check:production
