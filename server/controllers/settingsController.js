@@ -14,6 +14,7 @@ function normalizeSettings(raw) {
   const mapped = {
     school: {
       name: legacy.school?.name || legacy.schoolName,
+      shortName: legacy.school?.shortName || legacy.shortName,
       motto: legacy.school?.motto || legacy.motto,
       description: legacy.school?.description,
       logo: legacy.school?.logo || legacy.logo,
@@ -52,26 +53,18 @@ async function getOrCreateSettings() {
 }
 
 function sanitizeSettings(input = {}) {
-  const allowed = ["school", "contact", "social", "homepage", "about", "academics", "support", "footer"];
+  const allowed = ["school", "theme", "contact", "social", "homepage", "about", "academics", "support", "footer"];
   return Object.fromEntries(allowed.filter((key) => input[key] !== undefined).map((key) => [key, input[key]]));
 }
 
 exports.getPublicSettings = async (req, res) => {
-  try {
-    return res.json({ success: true, data: await getOrCreateSettings() });
-  } catch (error) {
-    console.error("Public school settings error:", error);
-    return res.status(500).json({ success: false, message: "Unable to load school settings" });
-  }
+  try { return res.json({ success: true, data: await getOrCreateSettings() }); }
+  catch (error) { console.error("Public school settings error:", error); return res.status(500).json({ success: false, message: "Unable to load school settings" }); }
 };
 
 exports.getAdminSettings = async (req, res) => {
-  try {
-    return res.json({ success: true, data: await getOrCreateSettings() });
-  } catch (error) {
-    console.error("Admin school settings error:", error);
-    return res.status(500).json({ success: false, message: "Unable to load school settings" });
-  }
+  try { return res.json({ success: true, data: await getOrCreateSettings() }); }
+  catch (error) { console.error("Admin school settings error:", error); return res.status(500).json({ success: false, message: "Unable to load school settings" }); }
 };
 
 exports.updateSettings = async (req, res) => {
