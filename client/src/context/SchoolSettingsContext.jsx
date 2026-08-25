@@ -4,6 +4,7 @@ const API_URL = `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api")
 
 const defaults = {
   school: { name: "Angels Home Education Centre", shortName: "Angels Home", motto: "Growing confident learners. Building stronger futures.", description: "Empowering young minds through quality education.", logo: "/favicon.svg" },
+  theme: { primaryColor: "#0f172a", secondaryColor: "#f59e0b", accentColor: "#2563eb", successColor: "#16a34a", logoHeight: "40", borderRadius: "12", footerStyle: "standard" },
   contact: { phone: "+254 725 481 011", email: "angelshomecentre@gmail.com", whatsapp: "", address: "Angels Home Education Centre", postalAddress: "P.O Box 225-00510 · Nairobi, Kenya", officeHours: "Monday–Friday · 8:00 AM–5:00 PM", mapEmbed: "https://www.google.com/maps?q=-1.2635235,36.8578211&hl=en&z=17&output=embed" },
   social: { facebook: "", youtube: "", twitter: "", instagram: "" },
   homepage: { eyebrow: "Admissions · Partnerships · School Support", heroTitle: "Growing confident learners. Building stronger futures.", heroText: "Quality education, character development and compassionate care in a community where every child is encouraged to discover their potential.", heroImage: "/images/slide1.jpg", stats: [{ value: "248+", label: "Learners served" }, { value: "24", label: "Dedicated teachers" }, { value: "94%", label: "Average attendance" }, { value: "10+", label: "Years of impact" }], educationEyebrow: "Education with purpose", educationTitle: "Education that shapes character, purpose and opportunity.", educationText: "At Angels Home Education Centre, quality education, character development and compassionate care come together to help every learner discover their potential and prepare for a meaningful future.", pillars: [{ number: "01", title: "Academic excellence", text: "Strong foundations, purposeful teaching and measurable learner progress." }, { number: "02", title: "Character & faith", text: "Discipline, integrity, compassion and leadership are woven into school life." }, { number: "03", title: "Whole-child care", text: "Pastoral support, creativity, sport and mentorship help every learner flourish." }], communityEyebrow: "A community built around learners", communityTitle: "One school. One community. One future.", communityText: "Whether you are a parent, teacher, sponsor or community partner, there is a meaningful way to participate in the Angels Home journey.", pathways: [{ eyebrow: "For families", title: "Parents & pupils", text: "Access learning support, school information and secure portal services.", href: "/register?role=parent", action: "Explore family services" }, { eyebrow: "For educators", title: "Teachers", text: "Connect with colleagues, manage learning and communicate with families.", href: "/register?role=teacher", action: "Join our teaching community" }, { eyebrow: "For impact partners", title: "Sponsors & partners", text: "Help fund meaningful education programmes and follow the impact of your contribution.", href: "/register?role=sponsor", action: "Partner with Angels Home" }], developmentEyebrow: "School development fund", developmentTitle: "Help us create more opportunities for learners.", developmentText: "Your support helps strengthen learning programmes, improve facilities and make quality education accessible to more children.", developmentGoal: "KES 18.5M", finalEyebrow: "Ready to take the next step?", finalTitle: "Discover what Angels Home can mean for your child." },
@@ -24,7 +25,6 @@ const SchoolSettingsContext = createContext({ settings: defaults, loading: false
 export function SchoolSettingsProvider({ children }) {
   const [settings, setSettings] = useState(defaults);
   const [loading, setLoading] = useState(true);
-
   const refresh = async () => {
     try {
       const response = await fetch(`${API_URL}/cms/settings`);
@@ -34,11 +34,8 @@ export function SchoolSettingsProvider({ children }) {
     } catch (error) {
       console.warn("School settings fallback:", error.message);
       setSettings(defaults);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
-
   useEffect(() => { refresh(); }, []);
   const value = useMemo(() => ({ settings, loading, refresh }), [settings, loading]);
   return <SchoolSettingsContext.Provider value={value}>{children}</SchoolSettingsContext.Provider>;
