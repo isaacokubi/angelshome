@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalShell from "./PortalShell";
 import AdminDashboard from "./AdminDashboard";
@@ -8,19 +8,25 @@ export default function PortalDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-
+  const load = useCallback((showLoading = false) => {
+    if (showLoading) setLoading(true);
+    return portalApi.dashboard().then((result) => { setData(result); setError(""); }).catch((err) => setError(err.message)).finally(() => setLoading(false));
+  }, []);
   useEffect(() => {
     let active = true;
-    portalApi.dashboard().then((result) => { if (active) setData(result); }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, []);
+    load(true).catch(() => {});
+    const refresh = () => { if (active) load(false).catch(() => {}); };
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => { active = false; window.clearInterval(interval); window.removeEventListener("focus", refresh); };
+  }, [load]);
 
   const role = data?.profile?.role || "pupil";
   return <PortalShell role={role}>
-    {loading && <div className="space-y-5"><div className="h-44 animate-pulse rounded-3xl bg-slate-200" /><div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((n) => <div key={n} className="h-32 animate-pulse rounded-2xl bg-slate-200" />)}</div></div>}
-    {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700"><p>{error}</p><button onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-white">Try again</button></div>}
-    {!loading && !error && data && role === "admin" && <AdminDashboard data={data} />}
-    {!loading && !error && data && role !== "admin" && <StandardDashboard data={data} role={role} />}
+    {loading && !data && <div className="space-y-5"><div className="h-44 animate-pulse rounded-3xl bg-slate-200" /><div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((n) => <div key={n} className="h-32 animate-pulse rounded-2xl bg-slate-200" />)}</div></div>}
+    {error && !data && <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700"><p>{error}</p><button onClick={() => load(true)} className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-white">Try again</button></div>}
+    {data && role === "admin" && <AdminDashboard data={data} />}
+    {data && role !== "admin" && <StandardDashboard data={data} role={role} />}
   </PortalShell>;
 }
 
