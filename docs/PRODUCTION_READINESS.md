@@ -40,12 +40,36 @@ A manual backup can be created with:
 npm run backup:database
 ```
 
-The repository also includes a scheduled GitHub Actions backup workflow. Configure these repository secrets before enabling it:
+The repository includes a scheduled GitHub Actions MongoDB backup workflow. Configure these required repository secrets:
 
 - `MONGO_URI`
 - `BACKUP_ENCRYPTION_KEY`
 
-Backups are encrypted with AES-256-CBC before the artifact is uploaded and are retained for 14 days. A real production service should additionally copy encrypted backups to independent storage and perform a restore test at least monthly.
+The workflow creates encrypted backups with AES-256-CBC and verifies the encrypted archive by decrypting it and running `mongorestore --dryRun`. Retention tiers are:
+
+- Daily: 14 days
+- Weekly: 56 days
+- Monthly: 365 days
+
+The workflow also produces a SHA-256 manifest retained for one year. If S3 credentials are configured, the encrypted backup is copied to independent object storage using server-side AES-256 encryption. Configure these additional repository secrets for independent storage:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `BACKUP_S3_BUCKET`
+
+If those optional S3 secrets are absent, the GitHub artifact backup still works normally.
+
+### Restore testing
+
+Use the **MongoDB Restore Test** workflow to validate a selected encrypted backup against a dedicated restore database. Configure:
+
+- `RESTORE_MONGO_URI` — a staging/restore database, never the production database.
+- `BACKUP_ENCRYPTION_KEY` — the same key used by the backup workflow.
+
+The workflow supports `validate` mode using `mongorestore --dryRun` and a deliberate `restore` mode protected by the `RESTORE` confirmation input. Do not point `RESTORE_MONGO_URI` at production unless a controlled disaster-recovery procedure explicitly requires it.
+
+Backup failures automatically create an open GitHub issue so they are not silently missed.
 
 ## Reporting
 
