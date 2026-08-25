@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 const statuses = ['present', 'absent', 'sick', 'late'];
 
@@ -31,7 +31,7 @@ export default function SMISAttendance() {
 
   const markAll = (status) => {
     setSaved(false);
-    setRecords((current) => Object.fromEntries(pupils.map((pupil) => [pupil.id, status])));
+    setRecords(Object.fromEntries(pupils.map((pupil) => [pupil.id, status])));
   };
 
   const summary = statuses.reduce((acc, status) => ({ ...acc, [status]: pupils.filter((p) => records[p.id] === status).length }), {});

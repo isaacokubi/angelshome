@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../services/api";
 import PortalShell from "../components/PortalShell";
 
@@ -13,14 +13,14 @@ export default function PortalResults() {
   const [error, setError] = useState("");
   const [exam, setExam] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError("");
     try { setData(await apiRequest(`/portal/results${exam ? `?exam=${encodeURIComponent(exam)}` : ""}`)); }
     catch (err) { setError(err.message || "Unable to load school results."); }
     finally { setLoading(false); }
-  };
+  }, [exam]);
 
-  useEffect(() => { void load(); }, [exam]);
+  useEffect(() => { void load(); }, [load]);
 
   const exams = useMemo(() => [...new Map((data?.results || []).filter((r) => r.exam?._id).map((r) => [r.exam._id, r.exam])).values()], [data]);
   const average = data?.summary?.average;

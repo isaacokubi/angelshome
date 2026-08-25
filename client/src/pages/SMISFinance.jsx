@@ -6,8 +6,8 @@ export default function SMISFinance() {
   const [form, setForm] = useState({ pupil: "", amount: "", paymentMethod: "mpesa", reference: "", term: "", academicYear: "" });
   const load = () => { setLoading(true); apiRequest("/finance/summary").then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false)); };
   useEffect(load, []);
-  const pupils = data?.pupils || []; const payments = data?.payments || []; const summary = data?.summary || {};
-  const recent = useMemo(() => payments.slice(0, 10), [payments]);
+  const pupils = data?.pupils || []; const summary = data?.summary || {};
+  const recent = useMemo(() => (data?.payments || []).slice(0, 10), [data]);
   const submit = async (event) => { event.preventDefault(); setSaving(true); setError(""); try { await apiRequest("/finance/payments", { method: "POST", body: JSON.stringify(form) }); setForm({ pupil: "", amount: "", paymentMethod: "mpesa", reference: "", term: "", academicYear: "" }); load(); } catch (e) { setError(e.message); } finally { setSaving(false); } };
   if (loading) return <div className="p-6 text-sm text-slate-500">Loading finance records...</div>;
   return <div className="space-y-6 p-6">

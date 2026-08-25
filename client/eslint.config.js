@@ -17,5 +17,11 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Data-fetching effects intentionally update local loading/data state.
+      // Keep the rule disabled until the async fetching layer is migrated to
+      // a dedicated query/cache abstraction.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])
