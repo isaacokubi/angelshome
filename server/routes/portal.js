@@ -21,12 +21,9 @@ async function schoolSnapshot() {
   const end = new Date(start); end.setDate(end.getDate() + 1);
   const [users, classes, subjects, attendance, openExams, resultsToday, totalResults] = await Promise.all([
     User.aggregate([{ $match: { isActive: true } }, { $group: { _id: "$role", count: { $sum: 1 } } }]),
-    SchoolClass.countDocuments({ isActive: true }),
-    Subject.countDocuments({ isActive: true }),
+    SchoolClass.countDocuments({ isActive: true }), Subject.countDocuments({ isActive: true }),
     Attendance.aggregate([{ $match: { date: { $gte: start, $lt: end } } }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
-    Exam.countDocuments({ status: "open" }),
-    ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }),
-    ExamResult.countDocuments(),
+    Exam.countDocuments({ status: "open" }), ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }), ExamResult.countDocuments(),
   ]);
   const counts = Object.fromEntries(users.map((x) => [x._id, x.count]));
   const attendanceToday = Object.fromEntries(attendance.map((x) => [x._id, x.count]));
@@ -59,8 +56,7 @@ async function resultSnapshot(user) {
     ExamResult.find(filter).populate("exam", "name term academicYear").populate("pupil", "name").populate("subject", "name code").sort({ createdAt: -1 }).limit(5).lean(),
   ]);
   const totals = aggregate[0] || { totalMarks: 0, totalMaxMarks: 0, subjects: [] };
-  const average = totals.totalMaxMarks ? Math.round((totals.totalMarks / totals.totalMaxMarks) * 100) : null;
-  return { count, subjects: totals.subjects.length, average, recent };
+  return { count, subjects: totals.subjects.length, average: totals.totalMaxMarks ? Math.round((totals.totalMarks / totals.totalMaxMarks) * 100) : null, recent };
 }
 
 router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
@@ -76,7 +72,6 @@ router.get("/dashboard", requireSchoolAuth, async (req, res, next) => {
     let children = [], sponsoredPupils = [];
     if (user.role === "parent") children = await buildPupilSummaries(user.children || []);
     if (user.role === "sponsor") sponsoredPupils = await buildPupilSummaries(user.sponsoredPupils || []);
-    if (user.role === "pupil") results.children = [];
     let stats;
     if (user.role === "pupil") stats = [
       { label: "Attendance", value: academic?.attendanceRate == null ? "Not recorded" : `${academic.attendanceRate}%`, note: academic?.attendanceRate == null ? "Awaiting school records" : "Recorded in school system" },
@@ -111,7 +106,7 @@ router.get("/results", requireSchoolAuth, async (req, res, next) => {
     if (req.query.pupil && validObjectId(req.query.pupil) && ["admin", "teacher"].includes(user.role)) filter.pupil = req.query.pupil;
     const results = await ExamResult.find(filter).populate("exam", "name type term academicYear").populate("pupil", "name email").populate("subject", "name code").sort({ createdAt: -1 }).limit(1000).lean();
     const totals = results.reduce((acc, item) => { acc.marks += Number(item.marks || 0); acc.maxMarks += Number(item.maxMarks || 0); return acc; }, { marks: 0, maxMarks: 0 });
-    return res.json({ success: true, results, summary: { count: results.length, subjects: new Set(results.map((r) => r.subject?._id?.toString()).filter(Boolean)).size, average: totals.maxMarks ? Math.round((totals.marks / totals.maxMarks) * 100) : null } });
+    return res.json({ success: true, profile: { id: user._id, name: user.name, role: user.role, roleLabel: roleLabels[user.role] || user.role }, results, summary: { count: results.length, subjects: new Set(results.map((r) => r.subject?._id?.toString()).filter(Boolean)).size, average: totals.maxMarks ? Math.round((totals.marks / totals.maxMarks) * 100) : null } });
   } catch (error) { next(error); }
 });
 
