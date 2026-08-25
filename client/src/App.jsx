@@ -14,6 +14,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import SMISDashboard from "./pages/SMISDashboard";
 import SMISOperations from "./pages/SMISOperations";
 import SMISResults from "./pages/SMISResults";
+import SMISFinance from "./pages/SMISFinance";
 import { Login, Register } from "./pages/Auth";
 import PortalDashboard from "./components/PortalDashboard";
 import { Management, Notifications, Learning } from "./pages/PortalPages";
@@ -21,18 +22,13 @@ import SchoolCoordination from "./pages/SchoolCoordination";
 import Community from "./pages/Community";
 
 const Guard = ({ role, children }) => <ProtectedPortal role={role}>{children}</ProtectedPortal>;
-
 function App() {
   const location = useLocation(); const isAdminArea = location.pathname.startsWith("/admin"); const isPortal = location.pathname.startsWith("/portal"); const hideChrome = isAdminArea || isPortal;
-  return <>
-    {!hideChrome && <Navbar />}
-    <Routes>
-      <Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/academics" element={<Academics />} /><Route path="/support" element={<Support />} /><Route path="/contact" element={<Contact />} /><Route path="/donations" element={<Donations />} /><Route path="/teachers" element={<Community type="teachers" />} /><Route path="/pupils" element={<Community type="pupils" />} /><Route path="/sponsors" element={<Community type="sponsors" />} /><Route path="/login" element={<Login />} /><Route path="/register" element={<Register />} />
-      <Route path="/portal/admin" element={<Guard role="admin"><PortalDashboard role="admin" /></Guard>} /><Route path="/portal/teacher" element={<Guard role="teacher"><PortalDashboard role="teacher" /></Guard>} /><Route path="/portal/pupil" element={<Guard role="pupil"><PortalDashboard role="pupil" /></Guard>} /><Route path="/portal/sponsor" element={<Guard role="sponsor"><PortalDashboard role="sponsor" /></Guard>} /><Route path="/portal/parent" element={<Guard role="parent"><PortalDashboard role="parent" /></Guard>} />
-      <Route path="/portal/admin/pupils" element={<Guard role="admin"><Management type="pupils" /></Guard>} /><Route path="/portal/admin/teachers" element={<Guard role="admin"><Management type="teachers" /></Guard>} /><Route path="/portal/admin/sponsors" element={<Guard role="admin"><Management type="sponsors" /></Guard>} /><Route path="/portal/admin/parents" element={<Guard role="admin"><Management type="parents" /></Guard>} /><Route path="/portal/admin/relationships" element={<Guard role="admin"><SchoolCoordination /></Guard>} /><Route path="/portal/notifications" element={<Guard><Notifications /></Guard>} /><Route path="/portal/teacher/classes" element={<Guard role="teacher"><Learning role="teacher" /></Guard>} /><Route path="/portal/pupil/learning" element={<Guard role="pupil"><Learning role="pupil" /></Guard>} /><Route path="/portal/sponsor/impact" element={<Guard role="sponsor"><Learning role="sponsor" /></Guard>} />
-      <Route path="/admin/login" element={<AdminLogin />} /><Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} /><Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} /><Route path="/admin/smis" element={<AdminRoute><SMISDashboard /></AdminRoute>} /><Route path="/admin/smis/operations" element={<AdminRoute><SMISOperations /></AdminRoute>} /><Route path="/admin/smis/results" element={<AdminRoute><SMISResults /></AdminRoute>} />
-    </Routes>
-    {!hideChrome && <Footer />}
-  </>;
+  return <>{!hideChrome && <Navbar />}<Routes>
+    <Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="/academics" element={<Academics />} /><Route path="/support" element={<Support />} /><Route path="/contact" element={<Contact />} /><Route path="/donations" element={<Donations />} /><Route path="/teachers" element={<Community type="teachers" />} /><Route path="/pupils" element={<Community type="pupils" />} /><Route path="/sponsors" element={<Community type="sponsors" />} /><Route path="/login" element={<Login />} /><Route path="/register" element={<Register />} />
+    <Route path="/portal/admin" element={<Guard role="admin"><PortalDashboard role="admin" /></Guard>} /><Route path="/portal/teacher" element={<Guard role="teacher"><PortalDashboard role="teacher" /></Guard>} /><Route path="/portal/pupil" element={<Guard role="pupil"><PortalDashboard role="pupil" /></Guard>} /><Route path="/portal/sponsor" element={<Guard role="sponsor"><PortalDashboard role="sponsor" /></Guard>} /><Route path="/portal/parent" element={<Guard role="parent"><PortalDashboard role="parent" /></Guard>} />
+    <Route path="/portal/admin/pupils" element={<Guard role="admin"><Management type="pupils" /></Guard>} /><Route path="/portal/admin/teachers" element={<Guard role="admin"><Management type="teachers" /></Guard>} /><Route path="/portal/admin/sponsors" element={<Guard role="admin"><Management type="sponsors" /></Guard>} /><Route path="/portal/admin/parents" element={<Guard role="admin"><Management type="parents" /></Guard>} /><Route path="/portal/admin/relationships" element={<Guard role="admin"><SchoolCoordination /></Guard>} /><Route path="/portal/notifications" element={<Guard><Notifications /></Guard>} /><Route path="/portal/teacher/classes" element={<Guard role="teacher"><Learning role="teacher" /></Guard>} /><Route path="/portal/pupil/learning" element={<Guard role="pupil"><Learning role="pupil" /></Guard>} /><Route path="/portal/sponsor/impact" element={<Guard role="sponsor"><Learning role="sponsor" /></Guard>} />
+    <Route path="/admin/login" element={<AdminLogin />} /><Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} /><Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} /><Route path="/admin/smis" element={<AdminRoute><SMISDashboard /></AdminRoute>} /><Route path="/admin/smis/operations" element={<AdminRoute><SMISOperations /></AdminRoute>} /><Route path="/admin/smis/results" element={<AdminRoute><SMISResults /></AdminRoute>} /><Route path="/admin/smis/finance" element={<AdminRoute><SMISFinance /></AdminRoute>} />
+  </Routes>{!hideChrome && <Footer />}</>;
 }
 export default App;
