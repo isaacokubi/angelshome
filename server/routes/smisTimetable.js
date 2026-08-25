@@ -3,7 +3,6 @@ const { requireSchoolAuth, requireSchoolRole } = require('../middleware/schoolAu
 const { listTimetable, createTimetable, updateTimetable, deleteTimetable } = require('../controllers/smisTimetableController');
 
 const router = express.Router();
-const staff = requireSchoolRole('admin', 'teacher');
 const adminOnly = requireSchoolRole('admin');
 
 router.get('/', requireSchoolAuth, listTimetable);
