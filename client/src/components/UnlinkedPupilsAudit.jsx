@@ -65,7 +65,7 @@ export default function UnlinkedPupilsAudit() {
                   <td className="px-4 py-4 text-slate-600">{pupil.email || "—"}</td>
                   <td className="px-4 py-4 font-semibold text-slate-700">{pupil.phone || "Not provided"}</td>
                   <td className="px-4 py-4 text-slate-500">{pupil.createdAt ? new Date(pupil.createdAt).toLocaleDateString() : "—"}</td>
-                  <td className="px-4 py-4"><Link to="/portal/admin/relationships" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-900 hover:bg-blue-100">Link parent</Link></td>
+                  <td className="px-4 py-4"><Link to={`/portal/admin/relationships?pupilId=${encodeURIComponent(pupil._id)}`} className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-900 hover:bg-blue-100">Link parent</Link></td>
                 </tr>
               ))}
             </tbody>
