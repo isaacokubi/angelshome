@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "create-admin": "node scripts/adminRegister.js",
     "reset-admin-password": "node scripts/resetAdminPassword.js",
-    "replace-admin": "node scripts/replaceAdmin.js"
+    "replace-admin": "node scripts/replaceAdmin.js",
+    "check:production": "node scripts/verifyProductionEnv.js",
+    "backup:database": "node scripts/backupDatabase.js"
   },
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",
