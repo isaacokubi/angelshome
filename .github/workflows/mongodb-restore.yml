@@ -1,0 +1,101 @@
+name: MongoDB Restore Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: GitHub Actions run ID containing the backup artifact
+        required: true
+        type: string
+      artifact_name:
+        description: Exact encrypted backup artifact name
+        required: true
+        type: string
+      mode:
+        description: Validate the backup or restore it into the dedicated restore database
+        required: true
+        type: choice
+        default: validate
+        options:
+          - validate
+          - restore
+      confirmation:
+        description: Type RESTORE only when deliberately restoring into RESTORE_MONGO_URI
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+  RESTORE_MONGO_URI: ${{ secrets.RESTORE_MONGO_URI }}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate restore configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_ENCRYPTION_KEY"
+          if [[ "${{ inputs.mode }}" == "restore" ]]; then
+            test -n "$RESTORE_MONGO_URI"
+            [[ "${{ inputs.confirmation }}" == "RESTORE" ]]
+          fi
+
+      - name: Install MongoDB Database Tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] http://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+
+      - name: Download encrypted backup
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: backup
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Locate backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          find backup -type f -print
+          test -n "$(find backup -type f -name '*.enc' -print -quit)"
+
+      - name: Decrypt backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          encrypted="$(find backup -type f -name '*.enc' -print -quit)"
+          openssl enc -d -aes-256-cbc -pbkdf2 -in "$encrypted" -out backup/angels-home.archive.gz -pass env:BACKUP_ENCRYPTION_KEY
+          test -s backup/angels-home.archive.gz
+
+      - name: Validate backup against restore database
+        if: inputs.mode == 'validate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RESTORE_MONGO_URI"
+          mongorestore --dryRun --uri "$RESTORE_MONGO_URI" --archive=backup/angels-home.archive.gz --gzip --verbose
+
+      - name: Restore backup into dedicated restore database
+        if: inputs.mode == 'restore'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mongorestore --uri "$RESTORE_MONGO_URI" --archive=backup/angels-home.archive.gz --gzip --drop --stopOnError
+
+      - name: Verify decrypted archive cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f backup/angels-home.archive.gz
