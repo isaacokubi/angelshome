@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Timetable = require("../models/Timetable");
 const SchoolTimetableConfig = require("../models/SchoolTimetableConfig");
+const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const Subject = require("../models/Subject");
 const SchoolClass = require("../models/SchoolClass");
 const User = require("../models/User");
@@ -71,24 +72,35 @@ async function generateTimetable(req, res) {
     const activeClasses = await SchoolClass.find({ isActive: true, academicYear }).lean(); const activeIds = new Set(activeClasses.map((c) => String(c._id))); const submittedIds = classes.map((c) => String(c.schoolClass));
     if (submittedIds.length !== activeClasses.length || new Set(submittedIds).size !== submittedIds.length || submittedIds.some((id) => !validId(id) || !activeIds.has(id))) return res.status(400).json({ success: false, message: "The timetable must contain exactly one complete plan for every active class in the selected academic year." });
 
+    const allocations = await ClassSubjectAllocation.find({ academicYear, isActive: true, schoolClass: { $in: [...activeIds] } }).lean();
+    const allocationMap = new Map(allocations.map((allocation) => [`${allocation.schoolClass}:${allocation.subject}`, allocation]));
     const subjectIds = []; const raw = []; const problems = []; const teacherLoad = new Map();
     for (const plan of classes) {
       if (!Array.isArray(plan.lessons) || !plan.lessons.length) { problems.push(`Class ${plan.schoolClass} has no lessons.`); continue; }
+      const seenSubjects = new Set();
       const total = plan.lessons.reduce((sum, lesson) => sum + Number(lesson.lessonsPerWeek || 0), 0); if (total > cleanSlots.length) problems.push(`Class ${plan.schoolClass} requires ${total} lessons but only ${cleanSlots.length} weekly slots exist.`);
-      for (const lesson of plan.lessons) { const count = Number(lesson.lessonsPerWeek); const teacher = String(lesson.teacher || "").trim(); if (!validId(lesson.subject) || !Number.isInteger(count) || count < 1 || !validId(teacher)) { problems.push(`Class ${plan.schoolClass} has an invalid lesson allocation. Select a subject and an allocated teacher.`); continue; } raw.push({ schoolClass: plan.schoolClass, subject: lesson.subject, teacher, lessonsPerWeek: count }); subjectIds.push(lesson.subject); }
+      for (const lesson of plan.lessons) {
+        const count = Number(lesson.lessonsPerWeek); const teacher = String(lesson.teacher || "").trim(); const subjectId = String(lesson.subject || "");
+        if (seenSubjects.has(subjectId)) { problems.push(`Class ${plan.schoolClass} lists the same subject more than once.`); continue; }
+        seenSubjects.add(subjectId);
+        if (!validId(subjectId) || !Number.isInteger(count) || count < 1 || !validId(teacher)) { problems.push(`Class ${plan.schoolClass} has an invalid lesson allocation. Select a subject and an allocated teacher.`); continue; }
+        const allocation = allocationMap.get(`${plan.schoolClass}:${subjectId}`);
+        if (!allocation || !allocation.teachers?.length) { problems.push(`Class ${plan.schoolClass} has no teacher allocation for subject ${subjectId}.`); continue; }
+        if (!allocation.teachers.some((id) => String(id) === teacher)) { problems.push(`Teacher ${teacher} is not allocated to this subject for class ${plan.schoolClass}.`); continue; }
+        raw.push({ schoolClass: plan.schoolClass, subject: subjectId, teacher, lessonsPerWeek: count }); subjectIds.push(subjectId);
+      }
     }
     if (problems.length) return res.status(400).json({ success: false, message: problems.join(" ") });
 
-    const subjects = await Subject.find({ _id: { $in: [...new Set(subjectIds.map(String))] }, isActive: true }).lean(); const subjectMap = new Map(subjects.map((s) => [String(s._id), s])); const tasks = [];
+    const subjects = await Subject.find({ _id: { $in: [...new Set(subjectIds)] }, isActive: true }).lean(); const subjectMap = new Map(subjects.map((s) => [String(s._id), s])); const tasks = [];
     for (const lesson of raw) {
       const subject = subjectMap.get(String(lesson.subject)); if (!subject) { problems.push(`Subject ${lesson.subject} was not found or is inactive.`); continue; }
       const teacher = await resolveTeacher(lesson.teacher); if (!teacher) { problems.push(`Teacher ${lesson.teacher} was not found or is inactive.`); continue; }
-      if (!subject.teachers?.some((id) => String(id) === String(teacher._id))) { problems.push(`${teacher.name || teacher.email} is not allocated to ${subject.name}.`); continue; }
       const load = (teacherLoad.get(String(teacher._id)) || 0) + lesson.lessonsPerWeek; teacherLoad.set(String(teacher._id), load); if (load > cleanSlots.length) problems.push(`${teacher.name || teacher.email} has ${load} assigned lessons but only ${cleanSlots.length} weekly slots are available.`);
       for (let i = 0; i < lesson.lessonsPerWeek; i += 1) tasks.push({ schoolClass: String(lesson.schoolClass), subject: String(subject._id), teacher: String(teacher._id), constraints: lesson.lessonsPerWeek });
     }
     if (problems.length) return res.status(400).json({ success: false, message: problems.join(" ") });
-    const assignments = schedule(tasks, cleanSlots); if (!assignments) return res.status(409).json({ success: false, message: "No collision-free timetable exists for the supplied class plans. Add periods, reduce weekly lesson counts, or allocate subjects to additional teachers." });
+    const assignments = schedule(tasks, cleanSlots); if (!assignments) return res.status(409).json({ success: false, message: "No collision-free timetable exists for the supplied class plans. Add periods, reduce weekly lesson counts, or allocate additional teachers." });
     const rows = assignments.map((a) => ({ schoolClass: a.schoolClass, subject: a.subject, teacher: a.teacher, dayOfWeek: a.dayOfWeek, period: a.period, startTime: a.startTime, endTime: a.endTime, academicYear, term, isActive: true }));
 
     const session = await mongoose.startSession();
