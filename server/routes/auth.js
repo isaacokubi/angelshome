@@ -51,8 +51,8 @@ router.post("/login", async (req, res, next) => {
 
 router.get("/me", requireSchoolAuth, (req, res) => res.json({ success: true, user: publicUser(req.schoolUser) }));
 
-// Account phone changes. Pupils cannot self-edit. A parent change is atomically
-// reflected on all linked pupils so the parent and pupil contact records stay aligned.
+// Account phone changes. Pupils cannot self-edit. Parent changes are propagated
+// to every linked pupil, including legacy pupils linked by the previous parent phone.
 router.patch("/phone", requireSchoolAuth, async (req, res, next) => {
   try {
     const user = req.schoolUser;
@@ -61,10 +61,30 @@ router.patch("/phone", requireSchoolAuth, async (req, res, next) => {
     if (!validPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid phone number." });
 
     if (user.role === "parent") {
+      const oldPhone = normalizePhone(user.phone);
       const updatedParent = await User.findByIdAndUpdate(user._id, { $set: { phone } }, { new: true, runValidators: true });
       if (!updatedParent) return res.status(404).json({ success: false, message: "Parent account not found." });
-      const pupilIds = Array.isArray(updatedParent.children) ? updatedParent.children.filter((id) => mongoose.Types.ObjectId.isValid(id)) : [];
-      if (pupilIds.length) await User.updateMany({ _id: { $in: pupilIds }, role: "pupil" }, { $set: { phone, parentPhone: phone } });
+
+      const linkedIds = Array.isArray(updatedParent.children)
+        ? updatedParent.children.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => id.toString())
+        : [];
+      const linkedPupils = await User.find({
+        role: "pupil",
+        isActive: true,
+        $or: [
+          { _id: { $in: linkedIds } },
+          ...(oldPhone ? [{ parentPhone: oldPhone }] : []),
+        ],
+      }).select("_id").lean();
+      const pupilIds = [...new Set(linkedPupils.map((pupil) => pupil._id.toString()))];
+
+      if (pupilIds.length) {
+        await User.updateMany(
+          { _id: { $in: pupilIds }, role: "pupil" },
+          { $set: { phone, parentPhone: phone } },
+        );
+      }
+
       return res.json({ success: true, message: "Phone number updated. All linked pupils have been synchronized with the new parent number.", user: publicUser(updatedParent), syncedPupils: pupilIds.length });
     }
 
@@ -74,19 +94,32 @@ router.patch("/phone", requireSchoolAuth, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Admin correction for a pupil whose stored number is wrong or does not match the parent contact.
+// Admin correction for a pupil whose stored number is wrong. The administrator
+// may provide the verified parent's number; the pupil's phone and parentPhone
+// are always kept identical after the correction.
 router.patch("/phone/pupils/:id", requireSchoolAuth, requireSchoolRole("admin"), async (req, res, next) => {
   try {
     const { id } = req.params;
     const phone = normalizePhone(req.body?.phone);
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid pupil account." });
-    if (!validPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid phone number." });
+    if (!validPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid parent/guardian phone number." });
+
     const pupil = await User.findOne({ _id: id, role: "pupil", isActive: true });
     if (!pupil) return res.status(404).json({ success: false, message: "Pupil account not found." });
+
+    const parent = await User.findOne({ role: "parent", isActive: true, phone }).select("_id name phone").lean();
     pupil.phone = phone;
     pupil.parentPhone = phone;
     await pupil.save();
-    return res.json({ success: true, message: "Pupil phone number corrected successfully.", user: publicUser(pupil) });
+
+    return res.json({
+      success: true,
+      message: parent
+        ? `Pupil phone corrected and synchronized with parent ${parent.name}.`
+        : "Pupil phone corrected successfully. The pupil phone and parent contact field now use the supplied verified number.",
+      user: publicUser(pupil),
+      matchedParent: parent ? { id: parent._id, name: parent.name, phone: parent.phone } : null,
+    });
   } catch (error) { next(error); }
 });
 
