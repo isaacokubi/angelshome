@@ -3,7 +3,6 @@ const Notification = require("../models/Notification");
 const User = require("../models/User");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
 const router = express.Router();
-const AUDIENCES = ["all", "admin", "teacher", "pupil", "sponsor", "parent"];
 const BROADCAST_AUDIENCES = ["all", "admin", "teacher", "pupil", "sponsor", "parent"];
 router.use(requireSchoolAuth);
 router.get("/", async (req, res, next) => {
