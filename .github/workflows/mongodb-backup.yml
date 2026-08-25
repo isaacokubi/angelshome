@@ -10,6 +10,7 @@ permissions:
 
 env:
   MONGO_URI: ${{ secrets.MONGO_URI }}
+  BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
 
 jobs:
   backup:
@@ -24,17 +25,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mongodb-database-tools
 
-      - name: Create backup
+      - name: Create encrypted backup
         shell: bash
         run: |
           set -euo pipefail
           test -n "$MONGO_URI"
+          test -n "$BACKUP_ENCRYPTION_KEY"
           mkdir -p backup
           mongodump --uri "$MONGO_URI" --archive=backup/angels-home.archive.gz --gzip
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in backup/angels-home.archive.gz -out backup/angels-home.archive.gz.enc -pass env:BACKUP_ENCRYPTION_KEY
+          rm -f backup/angels-home.archive.gz
 
-      - name: Upload backup artifact
+      - name: Upload encrypted backup artifact
         uses: actions/upload-artifact@v4
         with:
           name: angels-home-mongodb-backup-${{ github.run_id }}
-          path: backup/angels-home.archive.gz
+          path: backup/angels-home.archive.gz.enc
           retention-days: 14
