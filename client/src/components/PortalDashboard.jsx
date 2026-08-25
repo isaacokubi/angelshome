@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalShell from "./PortalShell";
 import AdminDashboard from "./AdminDashboard";
+import SponsorDashboard from "./SponsorDashboard";
 import SharedSchoolSnapshot from "./SharedSchoolSnapshot";
 import TimetablePanel from "./TimetablePanel";
 import { portalApi } from "../services/api";
@@ -28,7 +29,8 @@ export default function PortalDashboard() {
     {loading && !data && <div className="space-y-5"><div className="h-44 animate-pulse rounded-3xl bg-slate-200" /><div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((n) => <div key={n} className="h-32 animate-pulse rounded-2xl bg-slate-200" />)}</div></div>}
     {error && !data && <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm font-semibold text-red-700"><p>{error}</p><button onClick={() => load(true)} className="mt-4 rounded-xl bg-red-700 px-4 py-2 text-white">Try again</button></div>}
     {data && role === "admin" && <><AdminDashboard data={data} /><TimetablePanel role={role} /></>}
-    {data && role !== "admin" && <StandardDashboard data={data} role={role} />}
+    {data && role === "sponsor" && <SponsorDashboard data={data} />}
+    {data && role !== "admin" && role !== "sponsor" && <StandardDashboard data={data} role={role} />}
   </PortalShell>;
 }
 
