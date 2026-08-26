@@ -6,8 +6,6 @@ function resolveApiUrl() {
   const isLocalhost = /^(localhost|127\.0\.0\.1)$/i.test(hostname);
   const configured = String(import.meta.env.VITE_API_URL || "").trim();
 
-  // Respect an explicitly configured API everywhere. When localhost is using
-  // a remote API, apiRequest() below provides a local-network fallback.
   if (configured) return configured;
   if (isLocalhost) return LOCAL_API_URL;
   return PRODUCTION_API_URL;
@@ -17,7 +15,7 @@ const configuredApiUrl = resolveApiUrl();
 const API_URL = `${configuredApiUrl.replace(/\/$/, "")}${/\/api$/i.test(configuredApiUrl) ? "" : "/api"}`;
 const HOSTNAME = typeof window !== "undefined" ? window.location.hostname : "";
 const IS_LOCALHOST = /^(localhost|127\.0\.0\.1)$/i.test(HOSTNAME);
-const LOCAL_FALLBACK_URL = `${LOCAL_API_URL}`;
+const LOCAL_FALLBACK_URL = LOCAL_API_URL;
 
 export function getApiUrl(path = "", baseUrl = API_URL) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -44,18 +42,17 @@ export async function apiRequest(path, options = {}) {
   try {
     response = await requestOnce(primaryUrl, options, headers);
   } catch (primaryError) {
-    // During local development, gracefully fall back to the local API when a
-    // configured remote API is unreachable. Do not hide HTTP errors from a
-    // reachable API; only retry genuine network failures.
     if (!(IS_LOCALHOST && API_URL !== LOCAL_FALLBACK_URL)) {
-      throw new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that the API URL is correct for this environment.`);
+      const error = new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that the API URL is correct for this environment.`);
+      error.cause = primaryError;
+      throw error;
     }
 
     try {
       response = await requestOnce(getApiUrl(path, LOCAL_FALLBACK_URL), options, headers);
-    } catch {
+    } catch (localError) {
       const error = new Error(`Unable to reach the configured API at ${API_URL} or the local API at ${LOCAL_FALLBACK_URL}. Check that the Render/local server is running and that the API URL is correct.`);
-      error.cause = primaryError;
+      error.cause = localError;
       throw error;
     }
   }
