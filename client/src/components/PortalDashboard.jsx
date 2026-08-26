@@ -66,7 +66,10 @@ export default function PortalDashboard() {
 }
 
 function TeacherDashboard({ data, loading, onRefresh }) {
-  const learning = Array.isArray(data?.learning) ? data.learning : [];
+  const learning = useMemo(
+    () => (Array.isArray(data?.learning) ? data.learning : []),
+    [data.learning]
+  );
   const pupils = Array.isArray(data?.pupils) ? data.pupils : [];
   const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
   const attendance = data?.attendance || {};
