@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PortalShell from "../components/PortalShell";
 import { apiRequest } from "../services/api";
@@ -47,7 +47,10 @@ export default function TeacherDashboard() {
   const pupils = Array.isArray(data?.pupils) ? data.pupils : [];
   const results = Array.isArray(data?.results) ? data.results : [];
   const notifications = Array.isArray(data?.notifications) ? data.notifications : [];
-  const upcoming = useMemo(() => learning.filter((record) => record.nextLesson && new Date(record.nextLesson) >= new Date()).sort((a, b) => new Date(a.nextLesson) - new Date(b.nextLesson)).slice(0, 5), [learning]);
+  const upcoming = [...learning]
+    .filter((record) => record.nextLesson && new Date(record.nextLesson) >= new Date())
+    .sort((a, b) => new Date(a.nextLesson) - new Date(b.nextLesson))
+    .slice(0, 5);
   const averageProgress = stats.averageProgress == null ? null : Number(stats.averageProgress);
 
   return <PortalShell role="teacher">
