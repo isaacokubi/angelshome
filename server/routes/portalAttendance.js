@@ -6,8 +6,6 @@ const { requireSchoolAuth } = require("../middleware/schoolAuth");
 
 const router = express.Router();
 
-function currentAcademicYear() { return String(new Date().getFullYear()); }
-
 router.get("/", requireSchoolAuth, async (req, res, next) => {
   try {
     const user = req.schoolUser;
@@ -22,7 +20,7 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     } else if (user.role === "sponsor") {
       filter = { pupil: { $in: Array.isArray(user.sponsoredPupils) ? user.sponsoredPupils : [] } };
     } else if (user.role === "teacher") {
-      const year = currentAcademicYear();
+      const year = String(new Date().getFullYear());
       const [timetableClasses, classTeacherClasses] = await Promise.all([
         Timetable.find({ teacher: user._id, academicYear: year, isActive: true }).distinct("schoolClass"),
         SchoolClass.find({ classTeacher: user._id, academicYear: year, isActive: true }).distinct("_id"),
@@ -37,17 +35,17 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
       .populate("pupil", "name email")
       .populate("schoolClass", "name stream academicYear")
       .sort({ date: -1, createdAt: -1 })
-      .limit(500)
+      .limit(1000)
       .lean();
 
-    // Keep the latest attendance entry for each pupil/date/class so stale duplicate
-    // rows cannot inflate dashboard totals or appear twice in the register.
+    // One authoritative attendance result per pupil/date. Older seed versions
+    // could contain duplicate rows under different class records; keeping the
+    // latest row prevents those duplicates from inflating portal totals.
     const unique = new Map();
     records.forEach((record) => {
       const pupilId = record.pupil?._id?.toString() || String(record.pupil || "");
-      const classId = record.schoolClass?._id?.toString() || String(record.schoolClass || "");
       const dateKey = record.date ? new Date(record.date).toISOString().slice(0, 10) : "unknown";
-      const key = `${pupilId}|${classId}|${dateKey}`;
+      const key = `${pupilId}|${dateKey}`;
       if (!unique.has(key)) unique.set(key, record);
     });
 
