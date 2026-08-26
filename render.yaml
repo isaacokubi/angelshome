@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: angels-home-api
+    name: angelshome-1
     runtime: node
     rootDir: server
     buildCommand: npm ci
