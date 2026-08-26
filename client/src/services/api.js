@@ -2,16 +2,15 @@ const LOCAL_API_URL = "http://localhost:5000/api";
 const PRODUCTION_API_URL = "https://angelshome-1.onrender.com/api";
 
 function resolveApiUrl() {
+  const configured = String(import.meta.env.VITE_API_URL || "").trim();
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   const isLocalhost = /^(localhost|127\.0\.0\.1)$/i.test(hostname);
 
-  // Local development always uses the local Express API. This prevents a
-  // developer's production VITE_API_URL from accidentally breaking localhost.
-  if (isLocalhost) return LOCAL_API_URL;
-
-  const configured = String(import.meta.env.VITE_API_URL || "").trim();
+  // An explicitly configured API always wins. This lets localhost use the same
+  // Render/MongoDB environment when VITE_API_URL is set, while still supporting
+  // a fully local backend when no API URL is configured.
   if (configured) return configured;
-
+  if (isLocalhost) return LOCAL_API_URL;
   return PRODUCTION_API_URL;
 }
 
