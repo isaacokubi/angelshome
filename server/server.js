@@ -8,12 +8,27 @@ const { limiter, mongoSanitize, xss } = require("./middleware/security");
 const { startLessonReminderScheduler } = require("./services/lessonReminderScheduler");
 
 const app = express();
-const allowedOrigins = (process.env.CLIENT_ORIGINS || "http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean);
+const configuredOrigins = (process.env.CLIENT_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const productionOrigins = ["https://angelshome.vercel.app"];
+const allowedOrigins = [...new Set([
+  ...configuredOrigins,
+  ...productionOrigins,
+  ...(process.env.NODE_ENV !== "production" ? ["http://localhost:5173", "http://localhost:4173"] : []),
+])];
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
-app.use(cors({ origin(origin, callback) { if (!origin || allowedOrigins.includes(origin)) return callback(null, true); return callback(new Error("Origin not allowed by CORS")); }, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Origin not allowed by CORS"));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 app.use(limiter);
