@@ -1,9 +1,12 @@
 const express = require("express");
 const Attendance = require("../models/Attendance");
 const SchoolClass = require("../models/SchoolClass");
+const Timetable = require("../models/Timetable");
 const { requireSchoolAuth } = require("../middleware/schoolAuth");
 
 const router = express.Router();
+
+function currentAcademicYear() { return String(new Date().getFullYear()); }
 
 router.get("/", requireSchoolAuth, async (req, res, next) => {
   try {
@@ -11,7 +14,6 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     let filter;
 
     if (user.role === "admin") {
-      // Administrators are authorised to view the complete school register.
       filter = {};
     } else if (user.role === "pupil") {
       filter = { pupil: user._id };
@@ -20,35 +22,42 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     } else if (user.role === "sponsor") {
       filter = { pupil: { $in: Array.isArray(user.sponsoredPupils) ? user.sponsoredPupils : [] } };
     } else if (user.role === "teacher") {
-      // Teachers can only view attendance for active classes where they are
-      // assigned as the class teacher. This prevents the portal endpoint from
-      // exposing another teacher's register.
-      const classes = await SchoolClass.find({
-        classTeacher: user._id,
-        isActive: true,
-      }).select("_id").lean();
-
-      filter = { schoolClass: { $in: classes.map((schoolClass) => schoolClass._id) } };
+      const year = currentAcademicYear();
+      const [timetableClasses, classTeacherClasses] = await Promise.all([
+        Timetable.find({ teacher: user._id, academicYear: year, isActive: true }).distinct("schoolClass"),
+        SchoolClass.find({ classTeacher: user._id, academicYear: year, isActive: true }).distinct("_id"),
+      ]);
+      const classIds = [...new Set([...timetableClasses, ...classTeacherClasses].map(String))];
+      filter = { schoolClass: { $in: classIds } };
     } else {
-      return res.status(403).json({
-        success: false,
-        message: "Attendance is not available for this account",
-      });
+      return res.status(403).json({ success: false, message: "Attendance is not available for this account" });
     }
 
     const records = await Attendance.find(filter)
       .populate("pupil", "name email")
-      .populate("schoolClass", "name stream")
+      .populate("schoolClass", "name stream academicYear")
       .sort({ date: -1, createdAt: -1 })
       .limit(500)
       .lean();
 
-    const summary = records.reduce((acc, record) => {
+    // Keep the latest attendance entry for each pupil/date/class so stale duplicate
+    // rows cannot inflate dashboard totals or appear twice in the register.
+    const unique = new Map();
+    records.forEach((record) => {
+      const pupilId = record.pupil?._id?.toString() || String(record.pupil || "");
+      const classId = record.schoolClass?._id?.toString() || String(record.schoolClass || "");
+      const dateKey = record.date ? new Date(record.date).toISOString().slice(0, 10) : "unknown";
+      const key = `${pupilId}|${classId}|${dateKey}`;
+      if (!unique.has(key)) unique.set(key, record);
+    });
+
+    const dedupedRecords = [...unique.values()];
+    const summary = dedupedRecords.reduce((acc, record) => {
       acc[record.status] = (acc[record.status] || 0) + 1;
       return acc;
     }, {});
 
-    return res.json({ success: true, records, summary });
+    return res.json({ success: true, records: dedupedRecords, summary });
   } catch (error) {
     next(error);
   }
