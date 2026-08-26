@@ -4,78 +4,14 @@ const User = require("../models/User");
 const SchoolClass = require("../models/SchoolClass");
 const LearningContent = require("../models/LearningContent");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
-
 const router = express.Router();
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
 const teacherClass = async (user, classId) => SchoolClass.findOne({ _id: classId, isActive: true, classTeacher: user._id }).lean();
-
-router.get("/classes", requireSchoolAuth, async (req, res, next) => {
-  try {
-    const user = req.schoolUser;
-    let classes;
-    if (user.role === "teacher") classes = await SchoolClass.find({ isActive: true, classTeacher: user._id }).populate("classTeacher", "name email").sort({ academicYear: -1, name: 1, stream: 1 }).lean();
-    else if (user.role === "admin") classes = await SchoolClass.find({ isActive: true }).populate("classTeacher", "name email").sort({ academicYear: -1, name: 1, stream: 1 }).lean();
-    else classes = await SchoolClass.find({ isActive: true }).sort({ academicYear: -1, name: 1, stream: 1 }).lean();
-    return res.json({ success: true, classes });
-  } catch (error) { next(error); }
-});
-
-router.get("/feed", requireSchoolAuth, async (req, res, next) => {
-  try {
-    const user = req.schoolUser;
-    let classIds = [];
-    if (user.role === "pupil") classIds = user.classId ? [user.classId] : [];
-    if (user.role === "parent") {
-      const children = await User.find({ _id: { $in: user.children || [] }, role: "pupil", isActive: true }).select("classId").lean();
-      classIds = children.map((p) => p.classId).filter(validId);
-    }
-    if (user.role === "teacher") classIds = (await SchoolClass.find({ classTeacher: user._id, isActive: true }).select("_id").lean()).map((c) => c._id);
-    if (user.role === "admin") classIds = (await SchoolClass.find({ isActive: true }).select("_id").lean()).map((c) => c._id);
-    const items = await LearningContent.find({ classId: { $in: classIds }, published: true }).populate("classId", "name stream academicYear").populate("teacher", "name email").sort({ createdAt: -1 }).limit(200).lean();
-    return res.json({ success: true, items: items.map((item) => ({ ...item, submissions: undefined })) });
-  } catch (error) { next(error); }
-});
-
-router.post("/content", requireSchoolAuth, requireSchoolRole("teacher"), async (req, res, next) => {
-  try {
-    const user = req.schoolUser;
-    const { type, title, description, classId, subject, dueDate, startsAt, endsAt, videoUrl, meetingUrl, materialUrl, questions = [] } = req.body || {};
-    if (!["lesson", "homework", "assignment", "exam"].includes(type) || !title?.trim() || !validId(classId) || !subject?.trim()) return res.status(400).json({ success: false, message: "Type, title, class and subject are required." });
-    const cls = await teacherClass(user, classId);
-    if (!cls) return res.status(403).json({ success: false, message: "You can only publish learning content to a class assigned to you by the school." });
-    if (type === "exam" && (!Array.isArray(questions) || !questions.length)) return res.status(400).json({ success: false, message: "An online exam must contain at least one question." });
-    const cleanQuestions = type === "exam" ? questions.slice(0, 100).map((q) => ({ text: String(q.text || "").trim(), options: Array.isArray(q.options) ? q.options.map(String).slice(0, 6) : [], answer: Number(q.answer), marks: Number(q.marks) || 1 })).filter((q) => q.text && q.options.length >= 2 && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length) : [];
-    if (type === "exam" && !cleanQuestions.length) return res.status(400).json({ success: false, message: "Add valid multiple-choice questions before publishing the exam." });
-    const item = await LearningContent.create({ type, title: title.trim(), description: String(description || "").trim(), classId, subject: subject.trim(), teacher: user._id, dueDate: dueDate || null, startsAt: startsAt || null, endsAt: endsAt || null, videoUrl: String(videoUrl || "").trim(), meetingUrl: String(meetingUrl || "").trim(), materialUrl: String(materialUrl || "").trim(), questions: cleanQuestions, published: true });
-    const populated = await LearningContent.findById(item._id).populate("classId", "name stream academicYear").populate("teacher", "name email").lean();
-    return res.status(201).json({ success: true, message: "Published to every active pupil in the selected class.", item: { ...populated, questions: populated.questions.map(({ answer, ...q }) => q) } });
-  } catch (error) { next(error); }
-});
-
-router.post("/content/:id/submit", requireSchoolAuth, requireSchoolRole("pupil"), async (req, res, next) => {
-  try {
-    if (!validId(req.params.id)) return res.status(400).json({ success: false, message: "Invalid learning item." });
-    const item = await LearningContent.findOne({ _id: req.params.id, type: "exam", published: true });
-    if (!item) return res.status(404).json({ success: false, message: "Online exam not found." });
-    const pupil = req.schoolUser;
-    if (!pupil.classId || pupil.classId.toString() !== item.classId.toString()) return res.status(403).json({ success: false, message: "This exam is not assigned to your class." });
-    if (item.submissions.some((s) => s.pupil.toString() === pupil._id.toString())) return res.status(409).json({ success: false, message: "You have already submitted this exam." });
-    const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
-    const score = item.questions.reduce((sum, q, index) => sum + (Number(answers[index]) === q.answer ? Number(q.marks || 1) : 0), 0);
-    item.submissions.push({ pupil: pupil._id, answers: answers.map((a) => Number(a)), score });
-    await item.save();
-    const total = item.questions.reduce((sum, q) => sum + Number(q.marks || 1), 0);
-    return res.json({ success: true, score, total, percentage: total ? Math.round((score / total) * 100) : 0, message: "Exam submitted successfully." });
-  } catch (error) { next(error); }
-});
-
-router.get("/content/:id/submissions", requireSchoolAuth, requireSchoolRole("teacher"), async (req, res, next) => {
-  try {
-    if (!validId(req.params.id)) return res.status(400).json({ success: false, message: "Invalid learning item." });
-    const item = await LearningContent.findOne({ _id: req.params.id, teacher: req.schoolUser._id, type: "exam" }).populate("submissions.pupil", "name email").lean();
-    if (!item) return res.status(404).json({ success: false, message: "Exam not found." });
-    return res.json({ success: true, submissions: item.submissions, total: item.questions.reduce((sum, q) => sum + Number(q.marks || 1), 0) });
-  } catch (error) { next(error); }
-});
-
-module.exports = router;
+router.get("/classes", requireSchoolAuth, async (req,res,next)=>{try{const user=req.schoolUser;const filter=user.role==="teacher"?{isActive:true,classTeacher:user._id}:{isActive:true};const classes=await SchoolClass.find(filter).populate("classTeacher","name email").sort({academicYear:-1,name:1,stream:1}).lean();return res.json({success:true,classes});}catch(e){next(e);}});
+router.get("/class-requests",requireSchoolAuth,requireSchoolRole("admin"),async(req,res,next)=>{try{const pupils=await User.find({role:"pupil",isActive:true,classStatus:"pending",requestedClassId:{$ne:null}}).select("name email phone parentPhone requestedClassId classStatus createdAt").populate("requestedClassId","name stream academicYear").sort({createdAt:1}).lean();return res.json({success:true,pupils});}catch(e){next(e);}});
+router.patch("/class-requests/:id",requireSchoolAuth,requireSchoolRole("admin"),async(req,res,next)=>{try{if(!validId(req.params.id))return res.status(400).json({success:false,message:"Invalid pupil account."});const action=req.body?.action;if(!["confirm","reject"].includes(action))return res.status(400).json({success:false,message:"Choose confirm or reject."});const pupil=await User.findOne({_id:req.params.id,role:"pupil",isActive:true}).populate("requestedClassId","name stream academicYear");if(!pupil)return res.status(404).json({success:false,message:"Pupil account not found."});if(!pupil.requestedClassId)return res.status(400).json({success:false,message:"This pupil has no class request."});if(action==="confirm"){const cls=await SchoolClass.findOne({_id:pupil.requestedClassId._id,isActive:true});if(!cls)return res.status(404).json({success:false,message:"Requested class is no longer active."});pupil.classId=cls._id;pupil.classStatus="confirmed";pupil.requestedClassId=null;await pupil.save();return res.json({success:true,message:`${pupil.name} is now confirmed in ${cls.name}${cls.stream?` · ${cls.stream}`:""}.`,pupil:{id:pupil._id,classId:cls._id,classStatus:pupil.classStatus}});}pupil.requestedClassId=null;pupil.classId=null;pupil.classStatus="rejected";await pupil.save();return res.json({success:true,message:`Class request for ${pupil.name} was rejected.`,pupil:{id:pupil._id,classStatus:pupil.classStatus}});}catch(e){next(e);}});
+router.get("/feed",requireSchoolAuth,async(req,res,next)=>{try{const user=req.schoolUser;let classIds=[];if(user.role==="pupil")classIds=user.classId?[user.classId]:[];if(user.role==="parent"){const children=await User.find({_id:{$in:user.children||[]},role:"pupil",isActive:true}).select("classId").lean();classIds=children.map(p=>p.classId).filter(validId);}if(user.role==="teacher")classIds=(await SchoolClass.find({classTeacher:user._id,isActive:true}).select("_id").lean()).map(c=>c._id);if(user.role==="admin")classIds=(await SchoolClass.find({isActive:true}).select("_id").lean()).map(c=>c._id);const items=await LearningContent.find({classId:{$in:classIds},published:true}).populate("classId","name stream academicYear").populate("teacher","name email").sort({createdAt:-1}).limit(200).lean();return res.json({success:true,items:items.map(i=>({...i,submissions:undefined}))});}catch(e){next(e);}});
+router.post("/content",requireSchoolAuth,requireSchoolRole("teacher"),async(req,res,next)=>{try{const user=req.schoolUser;const {type,title,description,classId,subject,dueDate,startsAt,endsAt,videoUrl,meetingUrl,materialUrl,questions=[]}=req.body||{};if(!["lesson","homework","assignment","exam"].includes(type)||!title?.trim()||!validId(classId)||!subject?.trim())return res.status(400).json({success:false,message:"Type, title, class and subject are required."});const cls=await teacherClass(user,classId);if(!cls)return res.status(403).json({success:false,message:"You can only publish learning content to a class assigned to you by the school."});if(type==="exam"&&(!Array.isArray(questions)||!questions.length))return res.status(400).json({success:false,message:"An online exam must contain at least one question."});const cleanQuestions=type==="exam"?questions.slice(0,100).map(q=>({text:String(q.text||"").trim(),options:Array.isArray(q.options)?q.options.map(String).slice(0,6):[],answer:Number(q.answer),marks:Number(q.marks)||1})).filter(q=>q.text&&q.options.length>=2&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<q.options.length):[];if(type==="exam"&&!cleanQuestions.length)return res.status(400).json({success:false,message:"Add valid multiple-choice questions before publishing the exam."});const item=await LearningContent.create({type,title:title.trim(),description:String(description||"").trim(),classId,subject:subject.trim(),teacher:user._id,dueDate:dueDate||null,startsAt:startsAt||null,endsAt:endsAt||null,videoUrl:String(videoUrl||"").trim(),meetingUrl:String(meetingUrl||"").trim(),materialUrl:String(materialUrl||"").trim(),questions:cleanQuestions,published:true});const populated=await LearningContent.findById(item._id).populate("classId","name stream academicYear").populate("teacher","name email").lean();return res.status(201).json({success:true,message:"Published to every active pupil in the selected confirmed class.",item:{...populated,questions:populated.questions.map(({answer,...q})=>q)}});}catch(e){next(e);}});
+router.post("/content/:id/submit",requireSchoolAuth,requireSchoolRole("pupil"),async(req,res,next)=>{try{if(!validId(req.params.id))return res.status(400).json({success:false,message:"Invalid learning item."});const item=await LearningContent.findOne({_id:req.params.id,type:"exam",published:true});if(!item)return res.status(404).json({success:false,message:"Online exam not found."});const pupil=req.schoolUser;if(!pupil.classId||pupil.classId.toString()!==item.classId.toString())return res.status(403).json({success:false,message:"This exam is not assigned to your class."});if(item.submissions.some(s=>s.pupil.toString()===pupil._id.toString()))return res.status(409).json({success:false,message:"You have already submitted this exam."});const answers=Array.isArray(req.body?.answers)?req.body.answers:[];const score=item.questions.reduce((sum,q,index)=>sum+(Number(answers[index])===q.answer?Number(q.marks||1):0),0);item.submissions.push({pupil:pupil._id,answers:answers.map(a=>Number(a)),score});await item.save();const total=item.questions.reduce((sum,q)=>sum+Number(q.marks||1),0);return res.json({success:true,score,total,percentage:total?Math.round(score/total*100):0,message:"Exam submitted successfully."});}catch(e){next(e);}});
+router.get("/content/:id/submissions",requireSchoolAuth,requireSchoolRole("teacher"),async(req,res,next)=>{try{if(!validId(req.params.id))return res.status(400).json({success:false,message:"Invalid learning item."});const item=await LearningContent.findOne({_id:req.params.id,teacher:req.schoolUser._id,type:"exam"}).populate("submissions.pupil","name email").lean();if(!item)return res.status(404).json({success:false,message:"Exam not found."});return res.json({success:true,submissions:item.submissions,total:item.questions.reduce((sum,q)=>sum+Number(q.marks||1),0)});}catch(e){next(e);}});
+module.exports=router;
