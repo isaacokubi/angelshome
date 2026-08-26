@@ -1,4 +1,5 @@
 const Timetable = require('../models/Timetable');
+const User = require('../models/User');
 const PupilProfile = require('../models/PupilProfile');
 
 const populate = (query) => query
@@ -14,10 +15,18 @@ const normalizeIds = (values) => (Array.isArray(values) ? values : [])
 async function pupilClassIds(pupilIds) {
   const ids = normalizeIds(pupilIds);
   if (!ids.length) return [];
-  const profiles = await PupilProfile.find({ pupil: { $in: ids }, status: 'active', schoolClass: { $ne: null } })
-    .select('schoolClass')
-    .lean();
-  return [...new Set(profiles.map((profile) => String(profile.schoolClass)).filter(Boolean))];
+  const [pupils, profiles] = await Promise.all([
+    User.find({ _id: { $in: ids }, role: 'pupil', isActive: true })
+      .select('classId')
+      .lean(),
+    PupilProfile.find({ pupil: { $in: ids }, status: 'active', schoolClass: { $ne: null } })
+      .select('schoolClass')
+      .lean(),
+  ]);
+  return [...new Set([
+    ...pupils.map((pupil) => String(pupil.classId || '')).filter(Boolean),
+    ...profiles.map((profile) => String(profile.schoolClass || '')).filter(Boolean),
+  ])];
 }
 
 async function parentClassIds(user) {
@@ -78,10 +87,7 @@ const listScopedTimetable = async (req, res) => {
       success: true,
       scope,
       data: rows,
-      meta: {
-        returned: rows.length,
-        filteredInvalid: invalidCount,
-      },
+      meta: { returned: rows.length, filteredInvalid: invalidCount },
     });
   } catch (error) {
     console.error('Scoped timetable error:', error);
