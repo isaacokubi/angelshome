@@ -2,13 +2,12 @@ const LOCAL_API_URL = "http://localhost:5000/api";
 const PRODUCTION_API_URL = "https://angelshome-1.onrender.com/api";
 
 function resolveApiUrl() {
-  const configured = String(import.meta.env.VITE_API_URL || "").trim();
   const hostname = typeof window !== "undefined" ? window.location.hostname : "";
   const isLocalhost = /^(localhost|127\.0\.0\.1)$/i.test(hostname);
+  const configured = String(import.meta.env.VITE_API_URL || "").trim();
 
-  // An explicitly configured API always wins. This lets localhost use the same
-  // Render/MongoDB environment when VITE_API_URL is set, while still supporting
-  // a fully local backend when no API URL is configured.
+  // Respect an explicitly configured API everywhere. When localhost is using
+  // a remote API, apiRequest() below provides a local-network fallback.
   if (configured) return configured;
   if (isLocalhost) return LOCAL_API_URL;
   return PRODUCTION_API_URL;
@@ -16,10 +15,13 @@ function resolveApiUrl() {
 
 const configuredApiUrl = resolveApiUrl();
 const API_URL = `${configuredApiUrl.replace(/\/$/, "")}${/\/api$/i.test(configuredApiUrl) ? "" : "/api"}`;
+const HOSTNAME = typeof window !== "undefined" ? window.location.hostname : "";
+const IS_LOCALHOST = /^(localhost|127\.0\.0\.1)$/i.test(HOSTNAME);
+const LOCAL_FALLBACK_URL = `${LOCAL_API_URL}`;
 
-export function getApiUrl(path = "") {
+export function getApiUrl(path = "", baseUrl = API_URL) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${API_URL}${normalizedPath}`;
+  return `${baseUrl}${normalizedPath}`;
 }
 
 export function getAdminToken() { return localStorage.getItem("adminToken"); }
@@ -27,17 +29,35 @@ export function getSchoolToken() { return localStorage.getItem("angelshome_token
 export function clearAdminToken() { localStorage.removeItem("adminToken"); }
 export function clearSchoolToken() { localStorage.removeItem("angelshome_token"); localStorage.removeItem("angelshome_session"); }
 
+async function requestOnce(url, options, headers) {
+  return fetch(url, { ...options, headers });
+}
+
 export async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const token = getSchoolToken() || getAdminToken();
   if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
 
+  const primaryUrl = getApiUrl(path);
   let response;
   try {
-    response = await fetch(getApiUrl(path), { ...options, headers });
-  } catch {
-    throw new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that the API URL is correct for this environment.`);
+    response = await requestOnce(primaryUrl, options, headers);
+  } catch (primaryError) {
+    // During local development, gracefully fall back to the local API when a
+    // configured remote API is unreachable. Do not hide HTTP errors from a
+    // reachable API; only retry genuine network failures.
+    if (!(IS_LOCALHOST && API_URL !== LOCAL_FALLBACK_URL)) {
+      throw new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that the API URL is correct for this environment.`);
+    }
+
+    try {
+      response = await requestOnce(getApiUrl(path, LOCAL_FALLBACK_URL), options, headers);
+    } catch {
+      const error = new Error(`Unable to reach the configured API at ${API_URL} or the local API at ${LOCAL_FALLBACK_URL}. Check that the Render/local server is running and that the API URL is correct.`);
+      error.cause = primaryError;
+      throw error;
+    }
   }
 
   const contentType = response.headers.get("content-type") || "";
