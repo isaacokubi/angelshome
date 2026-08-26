@@ -28,8 +28,8 @@ function nairobiDayRange(date = new Date()) {
   return { start, end: new Date(start.getTime() + 86400000) };
 }
 
-function nextOccurrence(dayOfWeek, period, now = new Date()) {
-  const currentDay = nairobiDayNumber(now);
+function nextOccurrence(dayOfWeek, period) {
+  const currentDay = nairobiDayNumber();
   let dayOffset = Number(dayOfWeek) - currentDay;
   if (dayOffset < 0 || (dayOffset === 0 && Number(period) < 1)) dayOffset += 5;
   return dayOffset;
@@ -61,7 +61,7 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
       : [];
     const pupilIds = pupils.map((pupil) => pupil._id);
 
-    const [learning, attendanceRows, results, notifications] = await Promise.all([
+    const [storedLearning, attendanceRows, results, notifications] = await Promise.all([
       pupilIds.length ? LearningRecord.find({ pupil: { $in: pupilIds }, $or: [{ teacher: user._id }, { teacher: null }] }).sort({ nextLesson: 1, createdAt: -1 }).limit(200).lean() : [],
       allAssignedClassIds.length ? Attendance.find({ schoolClass: { $in: allAssignedClassIds }, date: { $gte: start, $lt: end } }).select("pupil schoolClass date status note").lean() : [],
       ExamResult.find({ enteredBy: user._id }).populate("pupil", "name").populate("subject", "name code").populate("exam", "name").sort({ createdAt: -1 }).limit(8).lean(),
@@ -70,18 +70,52 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
 
     const classMap = new Map();
     [...classTeacherClasses, ...validTimetable.map((row) => row.schoolClass).filter(Boolean)].forEach((item) => classMap.set(String(item._id), item));
+
+    const subjectRows = new Map();
+    validTimetable.forEach((row) => {
+      const subjectId = String(row.subject?._id || "");
+      if (subjectId && !subjectRows.has(subjectId)) subjectRows.set(subjectId, row.subject);
+    });
+    const teachingSubjects = [...subjectRows.values()];
+
+    const nextLessonByClass = new Map();
+    validTimetable
+      .map((row) => ({ row, offset: nextOccurrence(row.dayOfWeek, row.period) }))
+      .sort((a, b) => a.offset - b.offset || Number(a.row.period) - Number(b.row.period))
+      .forEach(({ row }) => {
+        const key = String(row.schoolClass?._id || "");
+        if (key && !nextLessonByClass.has(key)) nextLessonByClass.set(key, row);
+      });
+
+    const learning = storedLearning.length
+      ? storedLearning
+      : pupils.flatMap((pupil) => {
+        const classId = String(pupil.classId || "");
+        const nextLesson = nextLessonByClass.get(classId);
+        const classSubjectRows = validTimetable.filter((row) => String(row.schoolClass?._id || "") === classId);
+        const subjects = new Map();
+        classSubjectRows.forEach((row) => {
+          const key = String(row.subject?._id || row.subject?.name || "");
+          if (key && !subjects.has(key)) subjects.set(key, row.subject);
+        });
+        const subjectList = subjects.size ? [...subjects.values()] : teachingSubjects;
+        return subjectList.map((subject, index) => ({
+          _id: `workspace-${pupil._id}-${subject?._id || index}`,
+          pupil: { _id: pupil._id, name: pupil.name, email: pupil.email, classId: pupil.classId },
+          subject: subject?.name || "Subject",
+          progress: null,
+          nextLesson: nextLesson ? new Date(Date.now() + Math.max(0, Number(nextOccurrence(nextLesson.dayOfWeek, nextLesson.period))) * 86400000) : null,
+          teacher: user._id,
+          isWorkspaceDerived: true,
+        }));
+      });
+
     const summary = attendanceRows.reduce((acc, row) => { const key = row.status || "unknown"; acc[key] = (acc[key] || 0) + 1; return acc; }, {});
     const attendanceTotal = Object.values(summary).reduce((sum, value) => sum + Number(value || 0), 0);
     const attendanceRate = attendanceTotal ? Math.round((((summary.present || 0) + (summary.late || 0)) / attendanceTotal) * 100) : null;
     const dayLessons = validTimetable.filter((row) => Number(row.dayOfWeek) === dayOfWeek);
-    const subjectIds = [...new Set(validTimetable.map((row) => row.subject?._id?.toString()).filter(Boolean))];
     const progressValues = learning.map((record) => Number(record.progress)).filter(Number.isFinite);
     const averageProgress = progressValues.length ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length) : null;
-
-    const weeklyTimetable = validTimetable
-      .map((row) => ({ ...row, _nextDayOffset: nextOccurrence(row.dayOfWeek, row.period) }))
-      .sort((a, b) => a._nextDayOffset - b._nextDayOffset || Number(a.period) - Number(b.period))
-      .map(({ _nextDayOffset, ...row }) => row);
 
     return res.json({
       success: true,
@@ -90,11 +124,11 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
       pupils,
       learning,
       timetable: dayLessons,
-      weeklyTimetable,
+      weeklyTimetable: validTimetable,
       attendance: { summary, records: attendanceRows, totalMarked: attendanceTotal, attendanceRate },
       results,
       notifications,
-      stats: { classes: classMap.size, pupils: pupils.length, subjects: subjectIds.length, lessonsToday: dayLessons.length, learningRecords: learning.length, averageProgress },
+      stats: { classes: classMap.size, pupils: pupils.length, subjects: teachingSubjects.length, lessonsToday: dayLessons.length, learningRecords: learning.length, averageProgress },
       generatedAt: new Date().toISOString(),
     });
   } catch (error) { next(error); }
