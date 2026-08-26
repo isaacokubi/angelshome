@@ -4,10 +4,15 @@ const LOCAL_API_URL = "http://localhost:5000/api";
 const PRODUCTION_API_URL = "https://angelshome-1.onrender.com/api";
 
 function resolveApiUrl() {
+  const configured = String(import.meta.env.VITE_API_URL || "").trim();
   const host = typeof window !== "undefined" ? window.location.hostname : "";
-  const isLocal = /^(localhost|127\.0\.0\.1)$/i.test(host);
+  const isLocal = /^(localhost|127\.0.0.1)$/i.test(host);
+
+  // Explicit configuration always wins. This keeps local and deployed builds
+  // consistent with the database/API environment selected by VITE_API_URL.
+  if (configured) return configured;
   if (isLocal) return LOCAL_API_URL;
-  return String(import.meta.env.VITE_API_URL || PRODUCTION_API_URL).trim() || PRODUCTION_API_URL;
+  return PRODUCTION_API_URL;
 }
 
 const baseURL = resolveApiUrl().replace(/\/$/, "");
