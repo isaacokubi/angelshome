@@ -4,6 +4,9 @@ const bcrypt = require("bcryptjs");
 const connectDatabase = require("../config/database");
 const User = require("../models/User");
 const Exam = require("../models/Exam");
+const Attendance = require("../models/Attendance");
+const Notification = require("../models/Notification");
+const SchoolClass = require("../models/SchoolClass");
 
 const YEAR = "2026";
 const TERM = "Term 1";
@@ -43,8 +46,58 @@ async function run() {
     { $set: { status: "open" } }
   );
 
+  const classes = await SchoolClass.find({ academicYear: YEAR, isActive: true }).sort({ name: 1 }).limit(10).lean();
+  if (classes.length < 10) throw new Error(`Expected at least 10 active classes, found ${classes.length}.`);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const statuses = ["present", "present", "late", "present", "absent", "present", "sick", "present", "late", "present"];
+  for (let i = 0; i < 10; i += 1) {
+    await Attendance.findOneAndUpdate(
+      { pupil: pupils[i]._id, date: today },
+      {
+        pupil: pupils[i]._id,
+        schoolClass: classes[i % classes.length]._id,
+        date: today,
+        status: statuses[i],
+        note: "Live dashboard seed attendance record.",
+        recordedBy: classes[i % classes.length].classTeacher,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  }
+
+  const activityTitles = [
+    "School timetable updated",
+    "Attendance register published",
+    "New learning material available",
+    "Assessment window opened",
+    "Parent communication update",
+    "Library resources refreshed",
+    "Teacher lesson plan published",
+    "School operations notice",
+    "Academic progress update",
+    "Welcome to the school portal",
+  ];
+  for (let i = 0; i < activityTitles.length; i += 1) {
+    await Notification.findOneAndUpdate(
+      { audience: "all", title: activityTitles[i] },
+      {
+        audience: "all",
+        title: activityTitles[i],
+        message: `Live school activity record ${i + 1} for the Angels Home Education Centre portal.`,
+        channel: "in_app",
+        kind: "general",
+        readAt: null,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  }
+
   const openCount = await Exam.countDocuments({ academicYear: YEAR, term: TERM, status: "open" });
   const sponsorCount = await User.countDocuments({ role: "sponsor", isActive: true });
+  const todayAttendance = await Attendance.countDocuments({ date: today });
+  const todayActivity = await Notification.countDocuments({ audience: "all" });
 
   console.log(JSON.stringify({
     success: true,
@@ -53,7 +106,9 @@ async function run() {
     examinationsOpened: opened.modifiedCount,
     openExaminations: openCount,
     sponsorPupilLinks: sponsors.length,
-    message: "Dashboard sponsor and open-examination metrics now align with the seeded school records.",
+    todayAttendanceRecords: todayAttendance,
+    activityNotifications: todayActivity,
+    message: "Dashboard sponsor, examination, attendance and school-activity metrics now align with seeded live records.",
   }, null, 2));
 
   await mongoose.connection.close();
