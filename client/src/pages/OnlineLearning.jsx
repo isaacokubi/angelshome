@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import PortalShell from "../components/PortalShell";
 import { apiRequest } from "../services/api";
 
@@ -8,8 +8,8 @@ const emptyQuestion = () => ({ text: "", options: ["", ""], answer: 0, marks: 1 
 export function OnlineLearning({ role = "pupil" }) {
   const [items, setItems] = useState([]); const [classes, setClasses] = useState([]); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [answers, setAnswers] = useState({});
   const [form, setForm] = useState({ type: "lesson", title: "", description: "", classId: "", subject: "", dueDate: "", startsAt: "", endsAt: "", videoUrl: "", meetingUrl: "", materialUrl: "", questions: [emptyQuestion()] });
-  const load = async () => { setLoading(true); setError(""); try { const feed = await apiRequest("/learning/feed"); setItems(feed.items || []); if (role === "teacher" || role === "admin") { const c = await apiRequest("/learning/classes"); setClasses(c.classes || []); if (!form.classId && c.classes?.[0]) setForm((f) => ({ ...f, classId: c.classes[0]._id })); } } catch (e) { setError(e.message); } finally { setLoading(false); } };
-  useEffect(() => { void load(); }, [role]);
+  const load = useCallback(async () => { setLoading(true); setError(""); try { const feed = await apiRequest("/learning/feed"); setItems(feed.items || []); if (role === "teacher" || role === "admin") { const c = await apiRequest("/learning/classes"); setClasses(c.classes || []); if (!form.classId && c.classes?.[0]) setForm((f) => ({ ...f, classId: c.classes[0]._id })); } } catch (e) { setError(e.message); } finally { setLoading(false); } }, [form.classId, role]);
+  useEffect(() => { void load(); }, [load]);
   const update = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const updateQuestion = (index, key, value) => setForm((f) => ({ ...f, questions: f.questions.map((q, i) => i === index ? { ...q, [key]: value } : q) }));
   const addQuestion = () => setForm((f) => ({ ...f, questions: [...f.questions, emptyQuestion()] }));
