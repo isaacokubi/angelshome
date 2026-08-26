@@ -17,7 +17,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CLIENT_ORIGINS
-        sync: false
+        value: https://angelshome.vercel.app,http://localhost:5173,http://localhost:4173
       - key: SCHOOL_TIMEZONE
         value: Africa/Nairobi
       - key: JSON_BODY_LIMIT
