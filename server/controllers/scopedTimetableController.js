@@ -2,9 +2,9 @@ const Timetable = require('../models/Timetable');
 const PupilProfile = require('../models/PupilProfile');
 
 const populate = (query) => query
-  .populate('schoolClass', 'name stream academicYear')
-  .populate('subject', 'name code')
-  .populate('teacher', 'firstName lastName name email');
+  .populate('schoolClass', 'name stream academicYear isActive')
+  .populate('subject', 'name code isActive')
+  .populate('teacher', 'firstName lastName name email isActive role');
 
 const normalizeIds = (values) => (Array.isArray(values) ? values : [])
   .map((value) => value?._id || value?.id || value)
@@ -24,6 +24,17 @@ async function parentClassIds(user) {
   const pupilIds = user.role === 'parent' ? user.children : user.sponsoredPupils;
   return pupilClassIds(pupilIds);
 }
+
+const isValidLesson = (row) => (
+  row?.isActive === true &&
+  row?.schoolClass?._id &&
+  row.schoolClass.isActive !== false &&
+  row?.subject?._id &&
+  row.subject.isActive !== false &&
+  row?.teacher?._id &&
+  row.teacher.isActive !== false &&
+  row.teacher.role === 'teacher'
+);
 
 const listScopedTimetable = async (req, res) => {
   try {
@@ -56,8 +67,22 @@ const listScopedTimetable = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You do not have permission to view timetables.' });
     }
 
-    const rows = await populate(Timetable.find(filter).sort({ dayOfWeek: 1, period: 1, startTime: 1, schoolClass: 1 })).lean();
-    return res.json({ success: true, scope, data: rows });
+    const populatedRows = await populate(
+      Timetable.find(filter).sort({ dayOfWeek: 1, period: 1, startTime: 1, schoolClass: 1 })
+    ).lean();
+
+    const invalidCount = populatedRows.reduce((count, row) => count + (isValidLesson(row) ? 0 : 1), 0);
+    const rows = populatedRows.filter(isValidLesson);
+
+    return res.json({
+      success: true,
+      scope,
+      data: rows,
+      meta: {
+        returned: rows.length,
+        filteredInvalid: invalidCount,
+      },
+    });
   } catch (error) {
     console.error('Scoped timetable error:', error);
     return res.status(500).json({ success: false, message: 'Failed to load timetable' });
