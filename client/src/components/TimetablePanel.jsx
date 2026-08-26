@@ -9,9 +9,10 @@ function teacherName(teacher) {
   return teacher?.name || [teacher?.firstName, teacher?.lastName].filter(Boolean).join(" ") || "—";
 }
 
-function dayNumber(date = new Date()) {
-  const day = date.getDay();
-  return day === 0 ? 7 : day;
+function dayNumberInNairobi(date = new Date()) {
+  const weekday = new Intl.DateTimeFormat("en-KE", { timeZone: "Africa/Nairobi", weekday: "long" }).format(date);
+  const index = DAYS.indexOf(weekday);
+  return index > 0 ? index : 1;
 }
 
 export default function TimetablePanel({ role }) {
@@ -39,9 +40,9 @@ export default function TimetablePanel({ role }) {
     return () => { window.clearInterval(interval); window.removeEventListener("focus", refresh); };
   }, [load]);
 
-  const currentDay = dayNumber();
+  const currentDay = dayNumberInNairobi();
   const grouped = useMemo(() => {
-    const dayRows = rows.filter((row) => Number(row.dayOfWeek) === currentDay);
+    const dayRows = rows.filter((row) => Number(row.dayOfWeek) === currentDay && row.teacher?._id && row.schoolClass?._id && row.subject?._id);
     const map = new Map(PERIODS.map((period) => [period, []]));
     dayRows.forEach((row) => {
       const period = Number(row.period);
