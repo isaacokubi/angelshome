@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const validator = require("validator");
 const User = require("../models/User");
+const SchoolClass = require("../models/SchoolClass");
 const { requireSchoolAuth, requireSchoolRole } = require("../middleware/schoolAuth");
 const { authLimiter } = require("../middleware/security");
 
@@ -10,7 +11,7 @@ const router = express.Router();
 const normalizePhone = (value) => String(value || "").replace(/[\s()-]/g, "").trim();
 const validPhone = (value) => /^\+?[0-9]{9,15}$/.test(value);
 const signToken = (user) => jwt.sign({ sub: user._id.toString(), role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
-const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, parentPhone: u.parentPhone });
+const publicUser = (u) => ({ id: u._id, name: u.name, email: u.email, role: u.role, phone: u.phone, parentPhone: u.parentPhone, classId: u.classId || null, requestedClassId: u.requestedClassId || null, classStatus: u.classStatus || "none" });
 
 router.post("/register", authLimiter, async (req, res, next) => {
   try {
@@ -18,11 +19,16 @@ router.post("/register", authLimiter, async (req, res, next) => {
     const phone = normalizePhone(req.body?.phone);
     const parentPhone = normalizePhone(req.body?.parentPhone);
     const childEmail = String(req.body?.childEmail || "").toLowerCase().trim();
+    const requestedClassId = String(req.body?.classId || "").trim();
 
     if (!name || !validator.isEmail(String(email || "")) || typeof password !== "string" || password.length < 8) return res.status(400).json({ success: false, message: "Name, valid email and password of at least 8 characters are required" });
     if (!["pupil", "teacher", "sponsor", "parent"].includes(role)) return res.status(400).json({ success: false, message: "Invalid self-registration role" });
     if (!validPhone(phone)) return res.status(400).json({ success: false, message: "A valid phone number is required" });
     if (role === "pupil" && !validPhone(parentPhone)) return res.status(400).json({ success: false, message: "A valid parent or guardian phone number is required for pupil registration" });
+    if (role === "pupil" && !requestedClassId) return res.status(400).json({ success: false, message: "Select the class you are requesting to join" });
+    if (role === "pupil" && !mongoose.Types.ObjectId.isValid(requestedClassId)) return res.status(400).json({ success: false, message: "Select a valid school class" });
+    const requestedClass = role === "pupil" ? await SchoolClass.findOne({ _id: requestedClassId, isActive: true }).lean() : null;
+    if (role === "pupil" && !requestedClass) return res.status(404).json({ success: false, message: "The selected school class is not available" });
 
     const normalizedEmail = email.toLowerCase().trim();
     if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ success: false, message: "An account with this email already exists" });
@@ -36,8 +42,8 @@ router.post("/register", authLimiter, async (req, res, next) => {
     }
 
     const passwordHash = await User.hashPassword(password);
-    const user = await User.create({ name: name.trim(), email: normalizedEmail, passwordHash, role, phone, ...(role === "pupil" ? { parentPhone } : {}), ...(role === "parent" && verifiedChild ? { children: [verifiedChild._id] } : {}) });
-    return res.status(201).json({ success: true, token: signToken(user), user: publicUser(user) });
+    const user = await User.create({ name: name.trim(), email: normalizedEmail, passwordHash, role, phone, ...(role === "pupil" ? { parentPhone, requestedClassId, classStatus: "pending" } : {}), ...(role === "parent" && verifiedChild ? { children: [verifiedChild._id] } : {}) });
+    return res.status(201).json({ success: true, token: signToken(user), user: publicUser(user), message: role === "pupil" ? "Account created. Your requested class is awaiting school administrator confirmation." : undefined });
   } catch (error) { next(error); }
 });
 
@@ -50,77 +56,40 @@ router.post("/login", authLimiter, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.get("/me", requireSchoolAuth, (req, res) => res.json({ success: true, user: publicUser(req.schoolUser) }));
+router.get("/me", requireSchoolAuth, async (req, res) => res.json({ success: true, user: publicUser(req.schoolUser) }));
 
-// Account phone changes. Pupils cannot self-edit. Parent changes are propagated
-// to every linked pupil, including legacy pupils linked by the previous parent phone.
 router.patch("/phone", requireSchoolAuth, async (req, res, next) => {
   try {
     const user = req.schoolUser;
     const phone = normalizePhone(req.body?.phone);
     if (user.role === "pupil") return res.status(403).json({ success: false, message: "Pupil phone numbers can only be changed by a school administrator." });
     if (!validPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid phone number." });
-
     if (user.role === "parent") {
       const oldPhone = normalizePhone(user.phone);
       const updatedParent = await User.findByIdAndUpdate(user._id, { $set: { phone } }, { new: true, runValidators: true });
       if (!updatedParent) return res.status(404).json({ success: false, message: "Parent account not found." });
-
-      const linkedIds = Array.isArray(updatedParent.children)
-        ? updatedParent.children.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => id.toString())
-        : [];
-      const linkedPupils = await User.find({
-        role: "pupil",
-        isActive: true,
-        $or: [
-          { _id: { $in: linkedIds } },
-          ...(oldPhone ? [{ parentPhone: oldPhone }] : []),
-        ],
-      }).select("_id").lean();
+      const linkedIds = Array.isArray(updatedParent.children) ? updatedParent.children.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => id.toString()) : [];
+      const linkedPupils = await User.find({ role: "pupil", isActive: true, $or: [{ _id: { $in: linkedIds } }, ...(oldPhone ? [{ parentPhone: oldPhone }] : [])] }).select("_id").lean();
       const pupilIds = [...new Set(linkedPupils.map((pupil) => pupil._id.toString()))];
-
-      if (pupilIds.length) {
-        await User.updateMany(
-          { _id: { $in: pupilIds }, role: "pupil" },
-          { $set: { phone, parentPhone: phone } },
-        );
-      }
-
+      if (pupilIds.length) await User.updateMany({ _id: { $in: pupilIds }, role: "pupil" }, { $set: { phone, parentPhone: phone } });
       return res.json({ success: true, message: "Phone number updated. All linked pupils have been synchronized with the new parent number.", user: publicUser(updatedParent), syncedPupils: pupilIds.length });
     }
-
     const updatedUser = await User.findByIdAndUpdate(user._id, { $set: { phone } }, { new: true, runValidators: true });
     if (!updatedUser) return res.status(404).json({ success: false, message: "User account not found." });
     return res.json({ success: true, message: "Phone number updated successfully.", user: publicUser(updatedUser), syncedPupils: 0 });
   } catch (error) { next(error); }
 });
 
-// Admin correction for a pupil whose stored number is wrong. The administrator
-// may provide the verified parent's number; the pupil's phone and parentPhone
-// are always kept identical after the correction.
 router.patch("/phone/pupils/:id", requireSchoolAuth, requireSchoolRole("admin"), async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const phone = normalizePhone(req.body?.phone);
+    const { id } = req.params; const phone = normalizePhone(req.body?.phone);
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ success: false, message: "Invalid pupil account." });
     if (!validPhone(phone)) return res.status(400).json({ success: false, message: "Enter a valid parent/guardian phone number." });
-
     const pupil = await User.findOne({ _id: id, role: "pupil", isActive: true });
     if (!pupil) return res.status(404).json({ success: false, message: "Pupil account not found." });
-
     const parent = await User.findOne({ role: "parent", isActive: true, phone }).select("_id name phone").lean();
-    pupil.phone = phone;
-    pupil.parentPhone = phone;
-    await pupil.save();
-
-    return res.json({
-      success: true,
-      message: parent
-        ? `Pupil phone corrected and synchronized with parent ${parent.name}.`
-        : "Pupil phone corrected successfully. The pupil phone and parent contact field now use the supplied verified number.",
-      user: publicUser(pupil),
-      matchedParent: parent ? { id: parent._id, name: parent.name, phone: parent.phone } : null,
-    });
+    pupil.phone = phone; pupil.parentPhone = phone; await pupil.save();
+    return res.json({ success: true, message: parent ? `Pupil phone corrected and synchronized with parent ${parent.name}.` : "Pupil phone corrected successfully.", user: publicUser(pupil), matchedParent: parent ? { id: parent._id, name: parent.name, phone: parent.phone } : null });
   } catch (error) { next(error); }
 });
 
