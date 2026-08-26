@@ -22,12 +22,6 @@ const books = [
   ["Life Skills for Learners", "School Guidance Department", "Life Skills", "Life Skills", "A-10", 4],
 ];
 
-function endOfDay(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
 async function run() {
   await connectDatabase();
 
@@ -60,50 +54,60 @@ async function run() {
     const usableSubjects = classSubjects.length ? classSubjects : subjects;
     for (const subject of usableSubjects.slice(0, 10)) {
       const teacherId = teacherByClassSubject.get(`${String(pupil.classId || "")}|${subject._id}`) || teachers[(learningCreated + learningUpdated) % teachers.length]._id;
-      const result = await LearningRecord.findOneAndUpdate(
+      const existing = await LearningRecord.findOne({ pupil: pupil._id, subject: subject.name }).select("_id").lean();
+      await LearningRecord.findOneAndUpdate(
         { pupil: pupil._id, subject: subject.name },
         {
-          pupil: pupil._id,
-          subject: subject.name,
-          teacher: teacherId,
-          progress: null,
-          nextLesson: null,
+          $set: {
+            pupil: pupil._id,
+            subject: subject.name,
+            teacher: teacherId,
+            progress: null,
+            nextLesson: null,
+          },
+          $setOnInsert: {},
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-      if (result.createdAt && result.updatedAt && result.createdAt.getTime() === result.updatedAt.getTime()) learningCreated += 1;
-      else learningUpdated += 1;
+      if (existing) learningUpdated += 1;
+      else learningCreated += 1;
     }
   }
 
-  let libraryCreated = 0;
+  let libraryTouched = 0;
   for (const [title, author, category, subject, location, totalCopies] of books) {
-    const book = await LibraryBook.findOneAndUpdate(
+    await LibraryBook.findOneAndUpdate(
       { title },
       {
-        title,
-        author,
-        category,
-        subject,
-        publisher: "Angels Home Education Centre",
-        year: Number(YEAR),
-        location,
-        description: `School library resource for ${subject}.`,
-        totalCopies,
-        $setOnInsert: { availableCopies: totalCopies, isActive: true },
-        isActive: true,
+        $set: {
+          title,
+          author,
+          category,
+          subject,
+          publisher: "Angels Home Education Centre",
+          year: Number(YEAR),
+          location,
+          description: `School library resource for ${subject}.`,
+          totalCopies,
+          isActive: true,
+        },
+        $setOnInsert: {
+          availableCopies: totalCopies,
+        },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    libraryCreated += book ? 1 : 0;
+    libraryTouched += 1;
   }
 
-  // Repair impossible availability values without disturbing legitimate loans.
   const activeBooks = await LibraryBook.find({ isActive: true }).lean();
   for (const book of activeBooks) {
     const activeLoans = book.loans.filter((loan) => ["active", "overdue"].includes(loan.status)).length;
     const available = Math.max(0, Number(book.totalCopies || 0) - activeLoans);
-    await LibraryBook.updateOne({ _id: book._id }, { $set: { availableCopies: Math.min(Number(book.totalCopies || 0), available) } });
+    await LibraryBook.updateOne(
+      { _id: book._id },
+      { $set: { availableCopies: Math.min(Number(book.totalCopies || 0), available) } }
+    );
   }
 
   const activeBookCount = await LibraryBook.countDocuments({ isActive: true });
@@ -120,8 +124,11 @@ async function run() {
     teachers: teachers.length,
     subjects: subjects.length,
     learningRecords: learningCount,
+    learningCreated,
+    learningUpdated,
     teachersWithLearningRecords: activeLearningTeachers.length,
     libraryTitles: activeBookCount,
+    libraryTouched,
     message: "Teacher learning records and library catalogue aligned with active school data.",
   }, null, 2));
 
