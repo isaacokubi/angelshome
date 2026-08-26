@@ -2,12 +2,15 @@ const LOCAL_API_URL = "http://localhost:5000/api";
 const PRODUCTION_API_URL = "https://angelshome-1.onrender.com/api";
 
 function resolveApiUrl() {
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isLocalhost = /^(localhost|127\.0\.0\.1)$/i.test(hostname);
+
+  // Local development always uses the local Express API. This prevents a
+  // developer's production VITE_API_URL from accidentally breaking localhost.
+  if (isLocalhost) return LOCAL_API_URL;
+
   const configured = String(import.meta.env.VITE_API_URL || "").trim();
   if (configured) return configured;
-
-  if (typeof window !== "undefined" && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)) {
-    return LOCAL_API_URL;
-  }
 
   return PRODUCTION_API_URL;
 }
@@ -35,7 +38,7 @@ export async function apiRequest(path, options = {}) {
   try {
     response = await fetch(getApiUrl(path), { ...options, headers });
   } catch {
-    throw new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that VITE_API_URL is correct for this environment.`);
+    throw new Error(`Unable to reach the API at ${API_URL}. Check that the server is running and that the API URL is correct for this environment.`);
   }
 
   const contentType = response.headers.get("content-type") || "";
