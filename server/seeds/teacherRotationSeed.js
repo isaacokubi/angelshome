@@ -24,18 +24,6 @@ const PERIODS = [
 
 const mod = (n, m) => ((n % m) + m) % m;
 
-function chooseTeacher(options, classIndex, dayIndex, periodIndex, usage) {
-  const ranked = options.map((teacherId, optionIndex) => ({
-    teacherId: String(teacherId),
-    score:
-      (usage.get(`${teacherId}:${dayIndex}:${periodIndex}`) || 0) * 1000 +
-      (usage.get(`${teacherId}:week`) || 0) * 10 +
-      mod(optionIndex + classIndex + dayIndex + periodIndex, options.length),
-  })).sort((a, b) => a.score - b.score);
-
-  return ranked[0]?.teacherId;
-}
-
 async function run() {
   await connectDatabase();
 
@@ -49,14 +37,10 @@ async function run() {
   if (classes.length !== 10) throw new Error(`Expected 10 active Grade 1–10 Stream A classes, found ${classes.length}.`);
   if (subjects.length !== 10) throw new Error(`Expected 10 active SUB01–SUB10 subjects, found ${subjects.length}.`);
 
-  const teacherPoolBySubject = new Map();
-  for (let subjectIndex = 0; subjectIndex < subjects.length; subjectIndex += 1) {
-    const pool = [0, 1, 2, 3, 4].map((offset) => teachers[mod(subjectIndex + offset, teachers.length)]._id);
-    teacherPoolBySubject.set(String(subjects[subjectIndex]._id), [...new Set(pool.map(String))]);
-  }
-
-  // Every class/subject gets five valid teacher options. The scheduler can therefore
-  // rotate staff instead of repeatedly locking a subject to one teacher.
+  // Every active class/subject receives the complete teacher pool. This is intentional:
+  // the scheduler is responsible for rotating teachers and resolving collisions rather
+  // than permanently attaching one teacher to one class.
+  const teacherIds = teachers.map((teacher) => String(teacher._id));
   for (const schoolClass of classes) {
     for (const subject of subjects) {
       await ClassSubjectAllocation.findOneAndUpdate(
@@ -65,7 +49,7 @@ async function run() {
           schoolClass: schoolClass._id,
           subject: subject._id,
           academicYear: YEAR,
-          teachers: teacherPoolBySubject.get(String(subject._id)),
+          teachers: teacherIds,
           isActive: true,
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -73,28 +57,41 @@ async function run() {
     }
   }
 
-  // Build a deterministic collision-free grid. Each period contains all ten subjects
-  // exactly once, while the teacher for each subject rotates by weekday.
+  // Build a deterministic 10x8x5 timetable.
+  // For every day/period, each of the 10 classes gets one lesson and the 10 teachers
+  // are assigned through a cyclic permutation. Therefore a teacher can move between
+  // classes from period to period/day to day, but can never teach two classes at once.
   const rows = [];
-  const usage = new Map();
+  const teacherUsage = new Map();
+
   for (let dayIndex = 0; dayIndex < DAYS.length; dayIndex += 1) {
     const dayOfWeek = DAYS[dayIndex];
+
     for (let periodIndex = 0; periodIndex < PERIODS.length; periodIndex += 1) {
       const period = PERIODS[periodIndex];
       const teachersUsed = new Set();
+      const classesUsed = new Set();
 
       for (let classIndex = 0; classIndex < classes.length; classIndex += 1) {
         const schoolClass = classes[classIndex];
-        const subject = subjects[mod(classIndex + dayIndex + periodIndex, subjects.length)];
-        const options = teacherPoolBySubject.get(String(subject._id));
-        const available = options.filter((id) => !teachersUsed.has(id));
-        const teacher = chooseTeacher(available.length ? available : options, classIndex, dayIndex, periodIndex, usage);
-        if (!teacher) throw new Error(`Unable to assign teacher for ${schoolClass.name}, ${subject.name}, day ${dayOfWeek}, period ${period.period}.`);
-        if (teachersUsed.has(teacher)) throw new Error(`Teacher collision at day ${dayOfWeek}, period ${period.period}.`);
+        const subjectIndex = mod(classIndex + dayIndex + periodIndex, subjects.length);
+        const subject = subjects[subjectIndex];
+
+        // This cyclic assignment guarantees all 10 teachers are used once per period.
+        // Day and period offsets make teachers rotate across classes over the week.
+        const teacherIndex = mod(classIndex + (dayIndex * 3) + periodIndex, teachers.length);
+        const teacher = teacherIds[teacherIndex];
+
+        if (teachersUsed.has(teacher)) {
+          throw new Error(`Teacher collision at day ${dayOfWeek}, period ${period.period}.`);
+        }
+        if (classesUsed.has(String(schoolClass._id))) {
+          throw new Error(`Class collision at day ${dayOfWeek}, period ${period.period}.`);
+        }
 
         teachersUsed.add(teacher);
-        usage.set(`${teacher}:${dayIndex}:${periodIndex}`, (usage.get(`${teacher}:${dayIndex}:${periodIndex}`) || 0) + 1);
-        usage.set(`${teacher}:week`, (usage.get(`${teacher}:week`) || 0) + 1);
+        classesUsed.add(String(schoolClass._id));
+        teacherUsage.set(teacher, (teacherUsage.get(teacher) || 0) + 1);
 
         rows.push({
           schoolClass: schoolClass._id,
@@ -112,14 +109,18 @@ async function run() {
         });
       }
 
-      if (teachersUsed.size !== classes.length) throw new Error(`Teacher collision detected at day ${dayOfWeek}, period ${period.period}.`);
+      if (teachersUsed.size !== classes.length) {
+        throw new Error(`Expected ${classes.length} distinct teachers at day ${dayOfWeek}, period ${period.period}.`);
+      }
+      if (classesUsed.size !== classes.length) {
+        throw new Error(`Expected ${classes.length} distinct classes at day ${dayOfWeek}, period ${period.period}.`);
+      }
     }
   }
 
   await Timetable.deleteMany({ academicYear: YEAR, term: TERM });
   await Timetable.insertMany(rows, { ordered: true });
 
-  // Keep the saved builder configuration consistent with the regenerated grid.
   const classPlans = classes.map((schoolClass) => ({
     schoolClass: schoolClass._id,
     lessons: subjects.map((subject) => ({
@@ -147,16 +148,24 @@ async function run() {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  // Verify every day/period has exactly one teacher per class and ten distinct teachers.
-  const collisionMap = new Map();
+  // Final integrity checks: every class has 40 lessons, every teacher has 40 lessons,
+  // and every day/period has ten distinct teachers and ten distinct classes.
+  const classCounts = new Map();
   for (const row of rows) {
-    const key = `${row.dayOfWeek}:${row.period}`;
-    const teacherKey = `${key}:${row.teacher}`;
-    const classKey = `${key}:${row.schoolClass}`;
-    if (collisionMap.has(teacherKey)) throw new Error(`Teacher collision detected for ${teacherKey}.`);
-    if (collisionMap.has(classKey)) throw new Error(`Class collision detected for ${classKey}.`);
-    collisionMap.set(teacherKey, true);
-    collisionMap.set(classKey, true);
+    const classKey = String(row.schoolClass);
+    classCounts.set(classKey, (classCounts.get(classKey) || 0) + 1);
+  }
+  for (const schoolClass of classes) {
+    const count = classCounts.get(String(schoolClass._id)) || 0;
+    if (count !== DAYS.length * PERIODS.length) {
+      throw new Error(`${schoolClass.name} has ${count} lessons; expected ${DAYS.length * PERIODS.length}.`);
+    }
+  }
+
+  for (const [teacherId, count] of teacherUsage.entries()) {
+    if (count !== DAYS.length * PERIODS.length) {
+      throw new Error(`Teacher ${teacherId} has ${count} assignments; expected ${DAYS.length * PERIODS.length}.`);
+    }
   }
 
   console.log(JSON.stringify({
@@ -167,9 +176,12 @@ async function run() {
     classes: classes.length,
     subjects: subjects.length,
     teachers: teachers.length,
-    teacherOptionsPerClassSubject: 5,
+    teacherOptionsPerClassSubject: teacherIds.length,
+    lessonsPerTeacher: DAYS.length * PERIODS.length,
+    lessonsPerClass: DAYS.length * PERIODS.length,
     collisionFree: true,
-    message: "Teacher allocations now rotate across the week while preserving one lesson per class and one class per teacher in each period.",
+    rotation: true,
+    message: "Teachers rotate across classes by day and period. Every period contains exactly one lesson per class and exactly one lesson per teacher.",
   }, null, 2));
 
   await mongoose.connection.close();
