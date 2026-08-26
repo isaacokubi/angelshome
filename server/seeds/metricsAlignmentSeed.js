@@ -62,20 +62,18 @@ async function run() {
 
   const today = nairobiCalendarDateAsUtcMidnight();
   const statuses = ["present", "present", "late", "present", "absent", "present", "sick", "present", "late", "present"];
-  for (let i = 0; i < 10; i += 1) {
-    await Attendance.findOneAndUpdate(
-      { pupil: pupils[i]._id, date: today },
-      {
-        pupil: pupils[i]._id,
-        schoolClass: classes[i % classes.length]._id,
-        date: today,
-        status: statuses[i],
-        note: "Live dashboard seed attendance record.",
-        recordedBy: classes[i % classes.length].classTeacher,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-  }
+
+  // Rebuild today's dashboard attendance slice so stale duplicate rows from previous
+  // seed versions cannot inflate the teacher/admin overview counts.
+  await Attendance.deleteMany({ date: today });
+  await Attendance.insertMany(pupils.slice(0, 10).map((pupil, index) => ({
+    pupil: pupil._id,
+    schoolClass: classes[index % classes.length]._id,
+    date: today,
+    status: statuses[index],
+    note: "Live dashboard seed attendance record.",
+    recordedBy: classes[index % classes.length].classTeacher,
+  })));
 
   const activityTitles = [
     "School timetable updated",
@@ -117,6 +115,7 @@ async function run() {
     openExaminations: openCount,
     sponsorPupilLinks: sponsors.length,
     todayAttendanceRecords: todayAttendance,
+    expectedTodayAttendanceRecords: pupils.length,
     activityNotifications: todayActivity,
     attendanceDate: today.toISOString().slice(0, 10),
     attendanceTimezone: "Africa/Nairobi",
