@@ -14,7 +14,7 @@ export async function apiRequest(path, options = {}) {
   return payload;
 }
 export const authApi = { login: (body) => apiRequest("/auth/login", { method: "POST", body: JSON.stringify(body) }), register: (body) => apiRequest("/auth/register", { method: "POST", body: JSON.stringify(body) }), me: () => apiRequest("/auth/me") };
-export const portalApi = { dashboard: () => apiRequest("/portal/dashboard") };
+export const portalApi = { dashboard: () => apiRequest("/portal/dashboard"), metrics: () => apiRequest("/dashboard-metrics") };
 export const smisApi = { timetable: (params = {}) => { const query = new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== "")); return apiRequest(`/smis/timetable${query.toString() ? `?${query}` : ""}`); } };
 export const notificationApi = { list: () => apiRequest("/notifications"), read: (id) => apiRequest(`/notifications/${id}/read`, { method: "PATCH" }) };
 export default API_URL;
