@@ -8,7 +8,6 @@ const ExamResult = require("../models/ExamResult");
 const LearningContent = require("../models/LearningContent");
 const LearningRecord = require("../models/LearningRecord");
 const LibraryBook = require("../models/LibraryBook");
-const PupilProfile = require("../models/PupilProfile");
 const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const { requireSchoolAuth } = require("../middleware/schoolAuth");
 
@@ -25,14 +24,67 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     end.setDate(end.getDate() + 1);
     const academicYear = String(new Date().getFullYear());
 
+    const activeClassIds = await SchoolClass.find({ isActive: true, academicYear }).distinct("_id");
+
     const [pupils, teachers, parents, sponsors, classes, allocatedSubjectIds, exams, openExams, results, resultsToday, attendanceToday, library] = await Promise.all([
-      countActive("pupil"), countActive("teacher"), countActive("parent"), countActive("sponsor"),
+      countActive("pupil"),
+      countActive("teacher"),
+      countActive("parent"),
+      countActive("sponsor"),
       SchoolClass.countDocuments({ isActive: true, academicYear }),
-      ClassSubjectAllocation.distinct("subject", { isActive: true, academicYear, schoolClass: { $in: await SchoolClass.find({ isActive: true, academicYear }).distinct("_id") } }),
-      Exam.countDocuments(), Exam.countDocuments({ status: "open" }), ExamResult.countDocuments(),
+      ClassSubjectAllocation.distinct("subject", { isActive: true, academicYear, schoolClass: { $in: activeClassIds } }),
+      Exam.countDocuments(),
+      Exam.countDocuments({ status: "open" }),
+      ExamResult.countDocuments(),
       ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }),
-      Attendance.aggregate([{ $match: { date: { $gte: start, $lt: end } } }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
-      LibraryBook.aggregate([{ $match: { isActive: true } }, { $group: { _id: null, titles: { $sum: 1 }, copies: { $sum: "$totalCopies" }, available: { $sum: "$availableCopies" }, activeLoans: { $sum: { $size: { $filter: { input: "$loans", as: "loan", cond: { $in: ["$$loan.status", ["active", "overdue"]] } } } } }, overdue: { $sum: { $size: { $filter: { input: "$loans", as: "loan", cond: { $eq: ["$$loan.status", "overdue"] } } } } }, reservations: { $sum: { $size: { $filter: { input: "$reservations", as: "reservation", cond: { $eq: ["$$reservation.status", "pending"] } } } } } } }]),
+      Attendance.aggregate([
+        { $match: { date: { $gte: start, $lt: end } } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      LibraryBook.aggregate([
+        { $match: { isActive: true } },
+        {
+          $group: {
+            _id: null,
+            titles: { $sum: 1 },
+            copies: { $sum: "$totalCopies" },
+            available: { $sum: "$availableCopies" },
+            activeLoans: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: "$loans",
+                    as: "loan",
+                    cond: { $in: ["$$loan.status", ["active", "overdue"]] },
+                  },
+                },
+              },
+            },
+            overdue: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: "$loans",
+                    as: "loan",
+                    cond: { $eq: ["$$loan.status", "overdue"] },
+                  },
+                },
+              },
+            },
+            reservations: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: "$reservations",
+                    as: "reservation",
+                    cond: { $eq: ["$$reservation.status", "pending"] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ]),
     ]);
 
     const attendance = Object.fromEntries(attendanceToday.map((item) => [item._id, item.count]));
@@ -41,38 +93,70 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
 
     let teacher = null;
     let pupil = null;
+
     if (user.role === "teacher") {
+      const timetableClassIds = await require("../models/Timetable").distinct("schoolClass", {
+        teacher: user._id,
+        isActive: true,
+        academicYear,
+      });
+      const timetableSubjectIds = await require("../models/Timetable").distinct("subject", {
+        teacher: user._id,
+        isActive: true,
+        academicYear,
+      });
       const [classCount, subjectCount, contentCount, submittedCount] = await Promise.all([
-        SchoolClass.countDocuments({ isActive: true, classTeacher: user._id, academicYear }),
-        Subject.countDocuments({ isActive: true, teachers: user._id }),
+        SchoolClass.countDocuments({ _id: { $in: timetableClassIds }, isActive: true, academicYear }),
+        Subject.countDocuments({ _id: { $in: timetableSubjectIds }, isActive: true }),
         LearningContent.countDocuments({ teacher: user._id, published: true }),
         ExamResult.countDocuments({ enteredBy: user._id }),
       ]);
       teacher = { classes: classCount, subjects: subjectCount, publishedContent: contentCount, resultsEntered: submittedCount };
     }
+
     if (user.role === "pupil") {
-      const profile = await PupilProfile.findOne({ pupil: user._id }).select("schoolClass").lean();
-      const classId = profile?.schoolClass;
+      const classId = user.classId || null;
       const [contentCount, learningCount] = await Promise.all([
-        classId ? LearningContent.countDocuments({ classId, published: true }) : 0,
+        classId
+          ? LearningContent.countDocuments({ classId, published: true })
+          : 0,
         LearningRecord.countDocuments({ pupil: user._id }),
       ]);
-      pupil = { classId: classId || null, publishedLearning: contentCount, learningRecords: learningCount };
+      pupil = {
+        classId,
+        publishedLearning: contentCount,
+        learningRecords: learningCount,
+      };
     }
 
     return res.json({
       success: true,
       role: user.role,
       school: {
-        pupils, teachers, parents, sponsors, classes, subjects: allocatedSubjectIds.length, exams, openExams, results, resultsToday,
-        attendanceToday: { ...attendance, totalMarked: marked, attendanceRate: marked ? Math.round(((attendance.present || 0) / marked) * 100) : null },
+        pupils,
+        teachers,
+        parents,
+        sponsors,
+        classes,
+        subjects: allocatedSubjectIds.length,
+        exams,
+        openExams,
+        results,
+        resultsToday,
+        attendanceToday: {
+          ...attendance,
+          totalMarked: marked,
+          attendanceRate: marked ? Math.round(((attendance.present || 0) / marked) * 100) : null,
+        },
         library: libraryStats,
       },
       teacher,
       pupil,
       generatedAt: new Date().toISOString(),
     });
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;
