@@ -19,10 +19,40 @@ function normaliseTime(value) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+function sortLessons(rows) {
+  return rows.slice().sort((a, b) => {
+    const classCompare = className(a.schoolClass).localeCompare(className(b.schoolClass), undefined, { numeric: true });
+    if (classCompare) return classCompare;
+    return String(a.subject?.name || "").localeCompare(String(b.subject?.name || ""));
+  });
+}
+
 function periodTime(rows) {
   const first = rows.find((row) => row.startTime || row.endTime);
   if (!first) return "School period";
   return `${normaliseTime(first.startTime)}–${normaliseTime(first.endTime)}`;
+}
+
+function LessonCard({ row, showClass }) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+      {showClass && <p className="font-black text-blue-950">{className(row.schoolClass)}</p>}
+      <p className={`${showClass ? "mt-1" : ""} font-semibold text-blue-950`}>
+        {row.subject?.name || "Subject"}
+        {row.subject?.code ? <span className="ml-2 text-xs font-medium text-slate-400">({row.subject.code})</span> : null}
+      </p>
+      <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+        <div className="rounded-lg bg-white px-2.5 py-2">
+          <span className="font-bold uppercase tracking-wide text-slate-400">Teacher</span>
+          <p className="mt-0.5 font-semibold text-slate-700">{teacherName(row.teacher)}</p>
+        </div>
+        <div className="rounded-lg bg-white px-2.5 py-2">
+          <span className="font-bold uppercase tracking-wide text-slate-400">Room</span>
+          <p className="mt-0.5 font-semibold text-slate-700">{row.room || "—"}</p>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function TimetableTable({ rows, showClass }) {
@@ -37,72 +67,34 @@ function TimetableTable({ rows, showClass }) {
 
     return Array.from({ length: PERIOD_COUNT }, (_, index) => {
       const period = index + 1;
-      const items = (byPeriod.get(period) || []).slice().sort((a, b) => {
-        const classA = className(a.schoolClass);
-        const classB = className(b.schoolClass);
-        return classA.localeCompare(classB);
-      });
-      return { period, items };
+      return { period, items: sortLessons(byPeriod.get(period) || []) };
     });
   }, [rows]);
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full text-sm">
-        <thead>
-          <tr className="border-b bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
-            <th className="p-3">Period</th>
-            <th className="p-3">Time</th>
-            {showClass && <th className="p-3">Class / lessons</th>}
-            {!showClass && <th className="p-3">Subject</th>}
-            {showClass && <th className="p-3">Subject</th>}
-            <th className="p-3">Teacher</th>
-            <th className="p-3">Room</th>
-          </tr>
-        </thead>
-        <tbody>
-          {grouped.map(({ period, items }) => {
-            const time = periodTime(items);
-            if (!items.length) {
-              return (
-                <tr key={`period-${period}`} className="border-b last:border-0 bg-slate-50/40">
-                  <td className="p-3 font-semibold text-slate-700">{period}</td>
-                  <td className="whitespace-nowrap p-3 text-slate-500">{time}</td>
-                  {showClass ? <td className="p-3" colSpan={4}><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-400">Free / not scheduled</span></td> : <td className="p-3" colSpan={3}><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-400">Free / not scheduled</span></td>}
-                </tr>
-              );
-            }
+    <div className="space-y-3">
+      {grouped.map(({ period, items }) => {
+        const time = periodTime(items);
+        return (
+          <section key={`period-${period}`} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="rounded-lg bg-blue-950 px-3 py-1.5 text-sm font-black text-white">Period {period}</span>
+                <span className="font-semibold text-slate-600">{time}</span>
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{items.length} lesson{items.length === 1 ? "" : "s"}</span>
+            </div>
 
-            const displayTime = items.some((row) => row.startTime || row.endTime) ? periodTime(items) : "School period";
-            return (
-              <tr key={`period-${period}`} className="border-b align-top last:border-0 hover:bg-slate-50">
-                <td className="p-3 font-semibold text-slate-700">{period}</td>
-                <td className="whitespace-nowrap p-3 text-slate-600">{displayTime}</td>
-                <td className="p-3">
-                  <div className="space-y-2">
-                    {items.map((row) => (
-                      <div key={row._id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                        {showClass ? <p className="font-bold text-blue-950">{className(row.schoolClass)}</p> : null}
-                        <p className="mt-1 font-semibold text-blue-950">{row.subject?.name || "—"}{row.subject?.code ? <span className="ml-2 text-xs font-medium text-slate-400">{row.subject.code}</span> : null}</p>
-                      </div>
-                    ))}
-                  </div>
-                </td>
-                <td className="p-3">
-                  <div className="space-y-2">
-                    {items.map((row) => <div key={row._id} className="min-h-12 rounded-xl bg-white p-3 text-slate-700">{teacherName(row.teacher)}</div>)}
-                  </div>
-                </td>
-                <td className="p-3">
-                  <div className="space-y-2">
-                    {items.map((row) => <div key={row._id} className="min-h-12 rounded-xl bg-white p-3 text-slate-500">{row.room || "—"}</div>)}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            {items.length ? (
+              <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                {items.map((row) => <LessonCard key={row._id} row={row} showClass={showClass} />)}
+              </div>
+            ) : (
+              <div className="p-5 text-sm font-medium text-slate-400">Free / not scheduled</div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -114,7 +106,7 @@ function groupByClass(rows) {
     if (!groups.has(key)) groups.set(key, { label: className(row.schoolClass), rows: [] });
     groups.get(key).rows.push(row);
   });
-  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
+  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 }
 
 export default function SMISTimetable({ role = null }) {
@@ -172,11 +164,10 @@ export default function SMISTimetable({ role = null }) {
       : isParent
         ? "Your linked pupils' class timetables are shown in the same eight-period daily structure."
         : "Your class timetable is shown in the same eight-period daily structure.";
-  const printTimetable = () => window.print();
 
   return (
     <main className="space-y-6 p-6">
-      <header className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+      <header className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-amber-600">Live school data</p>
           <h1 className="text-2xl font-black text-blue-950">{title}</h1>
@@ -188,7 +179,7 @@ export default function SMISTimetable({ role = null }) {
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={printTimetable} disabled={!rows.length} className="rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Print / Extract</button>
+          <button type="button" onClick={() => window.print()} disabled={!rows.length} className="rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Print / Extract</button>
           {isAdmin && <Link to="/admin/smis/timetable" className="rounded-xl border bg-white px-4 py-2 text-sm font-bold text-blue-950 hover:bg-blue-50">Manage timetable</Link>}
         </div>
       </header>
@@ -205,8 +196,8 @@ export default function SMISTimetable({ role = null }) {
           {SCHOOL_DAYS.map((day) => {
             const dayRows = rows.filter((row) => Number(row.dayOfWeek) === day);
             return (
-              <section key={day} className="space-y-2">
-                <div className="flex items-center justify-between">
+              <section key={day} className="space-y-3">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <h2 className="text-lg font-black text-blue-950">{DAYS[day]}</h2>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">8 periods · {dayRows.length} scheduled lessons</span>
                 </div>
@@ -220,10 +211,10 @@ export default function SMISTimetable({ role = null }) {
           {SCHOOL_DAYS.map((day) => {
             const dayRows = rows.filter((row) => Number(row.dayOfWeek) === day);
             return (
-              <section key={day} className="space-y-2">
+              <section key={day} className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-black text-blue-950">{DAYS[day]}</h2>
-                  <span className="text-xs font-bold text-slate-400">8 periods</span>
+                  <span className="text-xs font-bold text-slate-400">8 periods · {dayRows.length} assigned lessons</span>
                 </div>
                 <TimetableTable rows={dayRows} showClass />
               </section>
@@ -241,8 +232,11 @@ export default function SMISTimetable({ role = null }) {
               {SCHOOL_DAYS.map((day) => {
                 const dayRows = group.rows.filter((row) => Number(row.dayOfWeek) === day);
                 return (
-                  <section key={day} className="space-y-2">
-                    <h3 className="text-sm font-black uppercase tracking-wide text-slate-500">{DAYS[day]}</h3>
+                  <section key={day} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-black uppercase tracking-wide text-slate-500">{DAYS[day]}</h3>
+                      <span className="text-xs font-bold text-slate-400">8 periods · {dayRows.length} lessons</span>
+                    </div>
                     <TimetableTable rows={dayRows} showClass={false} />
                   </section>
                 );
