@@ -80,7 +80,7 @@ export default function TeacherDashboard() {
           ["Classes", stats.classes || 0, "Classes assigned through timetable"],
           ["Subjects", stats.subjects || 0, "Subjects on your teaching load"],
           ["Progress", averageProgress == null ? "Not recorded" : `${averageProgress}%`, "Recorded learning progress"],
-          ["Attendance", attendance.attendanceRate == null ? "Not recorded" : `${attendance.attendanceRate}%`, `${attendance.totalMarked || 0} records today"],
+          ["Attendance", attendance.attendanceRate == null ? "Not recorded" : `${attendance.attendanceRate}%`, `${attendance.totalMarked || 0} records today`],
         ].map(([label, value, note]) => <article key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-semibold text-slate-500">{label}</p><p className="mt-2 text-3xl font-black text-blue-950">{value}</p><p className="mt-1 text-xs text-slate-500">{note}</p></article>)}
       </section>
 
