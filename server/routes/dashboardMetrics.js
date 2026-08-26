@@ -9,6 +9,7 @@ const LearningContent = require("../models/LearningContent");
 const LearningRecord = require("../models/LearningRecord");
 const LibraryBook = require("../models/LibraryBook");
 const PupilProfile = require("../models/PupilProfile");
+const ClassSubjectAllocation = require("../models/ClassSubjectAllocation");
 const { requireSchoolAuth } = require("../middleware/schoolAuth");
 
 const router = express.Router();
@@ -22,10 +23,12 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
+    const academicYear = String(new Date().getFullYear());
 
-    const [pupils, teachers, parents, sponsors, classes, subjects, exams, openExams, results, resultsToday, attendanceToday, library] = await Promise.all([
+    const [pupils, teachers, parents, sponsors, classes, allocatedSubjectIds, exams, openExams, results, resultsToday, attendanceToday, library] = await Promise.all([
       countActive("pupil"), countActive("teacher"), countActive("parent"), countActive("sponsor"),
-      SchoolClass.countDocuments({ isActive: true }), Subject.countDocuments({ isActive: true }),
+      SchoolClass.countDocuments({ isActive: true, academicYear }),
+      ClassSubjectAllocation.distinct("subject", { isActive: true, academicYear, schoolClass: { $in: await SchoolClass.find({ isActive: true, academicYear }).distinct("_id") } }),
       Exam.countDocuments(), Exam.countDocuments({ status: "open" }), ExamResult.countDocuments(),
       ExamResult.countDocuments({ createdAt: { $gte: start, $lt: end } }),
       Attendance.aggregate([{ $match: { date: { $gte: start, $lt: end } } }, { $group: { _id: "$status", count: { $sum: 1 } } }]),
@@ -40,7 +43,7 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     let pupil = null;
     if (user.role === "teacher") {
       const [classCount, subjectCount, contentCount, submittedCount] = await Promise.all([
-        SchoolClass.countDocuments({ isActive: true, classTeacher: user._id }),
+        SchoolClass.countDocuments({ isActive: true, classTeacher: user._id, academicYear }),
         Subject.countDocuments({ isActive: true, teachers: user._id }),
         LearningContent.countDocuments({ teacher: user._id, published: true }),
         ExamResult.countDocuments({ enteredBy: user._id }),
@@ -61,7 +64,7 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
       success: true,
       role: user.role,
       school: {
-        pupils, teachers, parents, sponsors, classes, subjects, exams, openExams, results, resultsToday,
+        pupils, teachers, parents, sponsors, classes, subjects: allocatedSubjectIds.length, exams, openExams, results, resultsToday,
         attendanceToday: { ...attendance, totalMarked: marked, attendanceRate: marked ? Math.round(((attendance.present || 0) / marked) * 100) : null },
         library: libraryStats,
       },
