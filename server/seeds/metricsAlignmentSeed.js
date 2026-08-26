@@ -12,6 +12,17 @@ const YEAR = "2026";
 const TERM = "Term 1";
 const PASSWORD = "ChangeMe123!";
 
+function nairobiCalendarDateAsUtcMidnight(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-KE", {
+    timeZone: "Africa/Nairobi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.filter(({ type }) => type !== "literal").map(({ type, value }) => [type, value]));
+  return new Date(Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day)));
+}
+
 async function run() {
   await connectDatabase();
 
@@ -49,8 +60,7 @@ async function run() {
   const classes = await SchoolClass.find({ academicYear: YEAR, isActive: true }).sort({ name: 1 }).limit(10).lean();
   if (classes.length < 10) throw new Error(`Expected at least 10 active classes, found ${classes.length}.`);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = nairobiCalendarDateAsUtcMidnight();
   const statuses = ["present", "present", "late", "present", "absent", "present", "sick", "present", "late", "present"];
   for (let i = 0; i < 10; i += 1) {
     await Attendance.findOneAndUpdate(
@@ -108,6 +118,8 @@ async function run() {
     sponsorPupilLinks: sponsors.length,
     todayAttendanceRecords: todayAttendance,
     activityNotifications: todayActivity,
+    attendanceDate: today.toISOString().slice(0, 10),
+    attendanceTimezone: "Africa/Nairobi",
     message: "Dashboard sponsor, examination, attendance and school-activity metrics now align with seeded live records.",
   }, null, 2));
 
