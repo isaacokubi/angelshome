@@ -1,0 +1,5 @@
+const mongoose=require("mongoose");
+const loanSchema=new mongoose.Schema({borrower:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},issuedAt:{type:Date,default:Date.now},dueAt:{type:Date,required:true},returnedAt:Date,status:{type:String,enum:["active","returned","overdue","lost"],default:"active"}},{_id:true});
+const libraryBookSchema=new mongoose.Schema({title:{type:String,required:true,trim:true},author:{type:String,required:true,trim:true},isbn:{type:String,trim:true},category:{type:String,default:"General",trim:true},subject:{type:String,trim:true},publisher:{type:String,trim:true},year:Number,location:{type:String,trim:true},description:{type:String,trim:true},coverUrl:{type:String,trim:true},totalCopies:{type:Number,min:1,default:1},availableCopies:{type:Number,min:0,default:1},isActive:{type:Boolean,default:true},loans:[loanSchema]},{timestamps:true});
+libraryBookSchema.index({title:"text",author:"text",isbn:"text",category:"text",subject:"text"});
+module.exports=mongoose.model("LibraryBook",libraryBookSchema);
