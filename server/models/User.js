@@ -11,6 +11,9 @@ const userSchema = new mongoose.Schema({
   parentPhone: { type: String, trim: true, maxlength: 20 },
   children: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   sponsoredPupils: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  classId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolClass", default: null, index: true },
+  requestedClassId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolClass", default: null },
+  classStatus: { type: String, enum: ["none", "pending", "confirmed", "rejected"], default: "none", index: true },
   isActive: { type: Boolean, default: true, index: true },
 }, { timestamps: true });
 
