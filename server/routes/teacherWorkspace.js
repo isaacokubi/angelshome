@@ -16,12 +16,23 @@ function nairobiDayNumber(date = new Date()) {
   return { Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6, Sunday: 7 }[weekday] || 1;
 }
 
-function nairobiDayRange(date = new Date()) {
+function nairobiDateParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const get = (type) => parts.find((part) => part.type === type)?.value;
-  const day = `${get("year")}-${get("month")}-${get("day")}`;
-  const start = new Date(`${day}T00:00:00+03:00`);
+  return { year: Number(get("year")), month: Number(get("month")), day: Number(get("day")) };
+}
+
+function nairobiDayRange(date = new Date()) {
+  const { year, month, day } = nairobiDateParts(date);
+  const start = new Date(Date.UTC(year, month - 1, day) - 3 * 60 * 60 * 1000);
   return { start, end: new Date(start.getTime() + 86400000) };
+}
+
+function nextOccurrence(dayOfWeek, period, now = new Date()) {
+  const currentDay = nairobiDayNumber(now);
+  let dayOffset = Number(dayOfWeek) - currentDay;
+  if (dayOffset < 0 || (dayOffset === 0 && Number(period) < 1)) dayOffset += 5;
+  return dayOffset;
 }
 
 router.get("/", requireSchoolAuth, async (req, res, next) => {
@@ -42,12 +53,17 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
 
     const validTimetable = timetable.filter((row) => row.schoolClass?.isActive !== false && row.subject?.isActive !== false && row.teacher?.isActive !== false && row.teacher?.role === "teacher");
     const classIds = [...new Set(validTimetable.map((row) => row.schoolClass?._id?.toString()).filter(Boolean))].map((id) => new mongoose.Types.ObjectId(id));
+    const classTeacherClasses = await SchoolClass.find({ classTeacher: user._id, academicYear, isActive: true }).select("_id name stream").lean();
+    const allAssignedClassIds = [...new Set([...classIds.map(String), ...classTeacherClasses.map((item) => String(item._id))])].map((id) => new mongoose.Types.ObjectId(id));
 
-    const [classTeacherClasses, learning, pupils, attendanceRows, results, notifications] = await Promise.all([
-      SchoolClass.find({ classTeacher: user._id, academicYear, isActive: true }).select("_id name stream").lean(),
-      LearningRecord.find({ teacher: user._id }).populate("pupil", "name email classId").sort({ nextLesson: 1, createdAt: -1 }).limit(200).lean(),
-      classIds.length ? User.find({ role: "pupil", isActive: true, classId: { $in: classIds } }).select("_id name email classId").sort({ name: 1 }).lean() : [],
-      classIds.length ? Attendance.find({ schoolClass: { $in: classIds }, date: { $gte: start, $lt: end } }).select("pupil schoolClass date status note").lean() : [],
+    const pupils = allAssignedClassIds.length
+      ? await User.find({ role: "pupil", isActive: true, classId: { $in: allAssignedClassIds } }).select("_id name email classId").sort({ name: 1 }).lean()
+      : [];
+    const pupilIds = pupils.map((pupil) => pupil._id);
+
+    const [learning, attendanceRows, results, notifications] = await Promise.all([
+      pupilIds.length ? LearningRecord.find({ pupil: { $in: pupilIds }, $or: [{ teacher: user._id }, { teacher: null }] }).sort({ nextLesson: 1, createdAt: -1 }).limit(200).lean() : [],
+      allAssignedClassIds.length ? Attendance.find({ schoolClass: { $in: allAssignedClassIds }, date: { $gte: start, $lt: end } }).select("pupil schoolClass date status note").lean() : [],
       ExamResult.find({ enteredBy: user._id }).populate("pupil", "name").populate("subject", "name code").populate("exam", "name").sort({ createdAt: -1 }).limit(8).lean(),
       Notification.find({ $or: [{ recipient: user._id }, { audience: "all" }, { audience: "teacher" }] }).sort({ createdAt: -1 }).limit(5).lean(),
     ]);
@@ -62,6 +78,11 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
     const progressValues = learning.map((record) => Number(record.progress)).filter(Number.isFinite);
     const averageProgress = progressValues.length ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length) : null;
 
+    const weeklyTimetable = validTimetable
+      .map((row) => ({ ...row, _nextDayOffset: nextOccurrence(row.dayOfWeek, row.period) }))
+      .sort((a, b) => a._nextDayOffset - b._nextDayOffset || Number(a.period) - Number(b.period))
+      .map(({ _nextDayOffset, ...row }) => row);
+
     return res.json({
       success: true,
       profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, role: user.role, roleLabel: "Teacher" },
@@ -69,6 +90,7 @@ router.get("/", requireSchoolAuth, async (req, res, next) => {
       pupils,
       learning,
       timetable: dayLessons,
+      weeklyTimetable,
       attendance: { summary, records: attendanceRows, totalMarked: attendanceTotal, attendanceRate },
       results,
       notifications,
