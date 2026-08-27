@@ -30,12 +30,39 @@ const login = async (req, res) => {
   const { email, password } = req.body || {};
   if (!email?.trim() || typeof password !== "string") return res.status(400).json({ message: "Email and password are required" });
   if (!process.env.JWT_SECRET) return res.status(500).json({ message: "Authentication service is not configured" });
+
+  const normalizedEmail = email.trim().toLowerCase();
   try {
-    const admin = await Admin.findOne({ email: email.trim().toLowerCase() }).select("+password");
-    if (!admin || admin.role !== "admin" || !(await bcrypt.compare(password, admin.password))) return res.status(401).json({ message: "Invalid email or password" });
-    const token = jwt.sign({ id: String(admin._id), role: admin.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "1d" });
-    return res.json({ token, user: { id: admin._id, name: admin.name, email: admin.email, role: admin.role } });
-  } catch (error) { console.error("Admin login error:", error); return res.status(500).json({ message: "Unable to sign in" }); }
+    // The school portal uses User for every role, including administrators.
+    // Authenticate that canonical account first so /login and /admin/login
+    // cannot disagree about which administrator account is valid.
+    const schoolAdmin = await User.findOne({ email: normalizedEmail, role: "admin", isActive: true }).select("+passwordHash");
+    if (schoolAdmin && await schoolAdmin.verifyPassword(password)) {
+      const token = jwt.sign(
+        { sub: String(schoolAdmin._id), id: String(schoolAdmin._id), role: "admin" },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      );
+      return res.json({ token, user: { id: schoolAdmin._id, name: schoolAdmin.name, email: schoolAdmin.email, role: "admin" } });
+    }
+
+    // Keep compatibility with legacy Admin documents while existing accounts
+    // are migrated to the canonical User collection.
+    const legacyAdmin = await Admin.findOne({ email: normalizedEmail }).select("+password");
+    if (!legacyAdmin || legacyAdmin.role !== "admin" || !(await bcrypt.compare(password, legacyAdmin.password))) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    const token = jwt.sign(
+      { sub: String(legacyAdmin._id), id: String(legacyAdmin._id), role: "admin" },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+    );
+    return res.json({ token, user: { id: legacyAdmin._id, name: legacyAdmin.name, email: legacyAdmin.email, role: "admin" } });
+  } catch (error) {
+    console.error("Admin login error:", error);
+    return res.status(500).json({ message: "Unable to sign in" });
+  }
 };
 
 const dashboard = async (req, res) => {
