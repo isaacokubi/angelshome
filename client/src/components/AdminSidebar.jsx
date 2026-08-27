@@ -7,6 +7,7 @@ const links = [
   { name: "Gallery", path: "/admin/cms/gallery" },
   { name: "Events", path: "/admin/cms/events" },
   { name: "Fees", path: "/admin/cms/fees" },
+  { name: "Records Management", path: "/admin/records" },
   { name: "Settings", path: "/admin/cms/settings" },
 ];
 
