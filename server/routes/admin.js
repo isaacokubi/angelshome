@@ -52,11 +52,12 @@ router.get("/gallery", auth, admin, async (req, res) => {
 
 router.post("/gallery", auth, admin, async (req, res) => {
   try {
-    const { title, url, image, mediaType, category, caption, isPublished, sortOrder } = req.body || {};
+    const { title, url, image, mediaType, category, caption, isPublished, sortOrder, consentConfirmed, consentNote } = req.body || {};
     const mediaUrl = String(url || image || "").trim();
     const type = mediaType === "video" ? "video" : "image";
 
     if (!title?.trim()) return res.status(400).json({ message: "A media title is required." });
+    if (type === "image" && !consentConfirmed) return res.status(400).json({ message: "Confirm that you have permission to publish this school media before publishing it." });
     if (!mediaUrl) return res.status(400).json({ message: "A media URL is required." });
     if (mediaUrl.startsWith("data:")) return res.status(400).json({ message: "Direct base64 media is no longer accepted. Upload the file to cloud storage or provide a hosted URL." });
     if (mediaUrl.length > 2000000) return res.status(400).json({ message: "Media URL is too large. Upload the file to cloud storage instead." });
@@ -70,6 +71,10 @@ router.post("/gallery", auth, admin, async (req, res) => {
       caption: caption?.trim() || "",
       isPublished: isPublished !== false,
       sortOrder: Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+      consentConfirmed: Boolean(consentConfirmed),
+      consentNote: String(consentNote || "").trim(),
+      consentRecordedAt: consentConfirmed ? new Date() : null,
+      consentRecordedBy: consentConfirmed ? (req.user?.sub || req.user?.id || null) : null,
     });
 
     return res.status(201).json(item);
@@ -81,7 +86,7 @@ router.post("/gallery", auth, admin, async (req, res) => {
 
 router.patch("/gallery/:id", auth, admin, async (req, res) => {
   try {
-    const allowed = ["title", "url", "image", "mediaType", "category", "caption", "isPublished", "sortOrder"];
+    const allowed = ["title", "url", "image", "mediaType", "category", "caption", "isPublished", "sortOrder", "consentConfirmed", "consentNote"];
     const update = Object.fromEntries(allowed.filter((key) => req.body?.[key] !== undefined).map((key) => [key, req.body[key]]));
     if (update.url && !update.image && update.mediaType !== "video") update.image = update.url;
     const item = await Gallery.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true }).lean();
