@@ -2,15 +2,16 @@ const express = require("express");
 const Donation = require("../models/Donation");
 const auth = require("../middleware/auth");
 const admin = require("../middleware/adminMiddleware");
+const { publicWriteLimiter } = require("../middleware/security");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   try {
     const { donorName, phone, email, amount, paymentMethod, project } = req.body || {};
     const numericAmount = Number(amount);
 
-    if (!phone?.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+    if (!phone?.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0 || numericAmount > 1000000) {
       return res.status(400).json({ success: false, message: "Valid phone and donation amount are required" });
     }
 
