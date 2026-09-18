@@ -47,6 +47,7 @@ import Library from "./pages/Library";
 import AdminLibrary from "./pages/AdminLibrary";
 import AdminRecordManager from "./pages/AdminRecordManager";
 import AdminGallery from "./pages/AdminGallery";
+import LearnerSetup from "./pages/LearnerSetup";
 
 const Guard = ({ role, roles, children }) => (
   <ProtectedPortal role={role} roles={roles}>
@@ -78,6 +79,7 @@ function App() {
         <Route path="/sponsors" element={<Community type="sponsors" />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/learner/setup/:token" element={<LearnerSetup />} />
 
         <Route
           path="/portal/admin"
