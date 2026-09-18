@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 require("dotenv").config();
-const required = ["MONGO_URI", "JWT_SECRET", "CLIENT_ORIGINS"];
+const required = ["JWT_SECRET", "CLIENT_ORIGINS"];
 const missing = required.filter((key) => !String(process.env[key] || "").trim());
+const mongoUri = String(process.env.MONGODB_URI || process.env.MONGO_URI || "").trim();
+if (!mongoUri) missing.push("MONGODB_URI (or MONGO_URI)");
 if (missing.length) { console.error(`Missing required production environment variables: ${missing.join(", ")}`); process.exit(1); }
 if (process.env.NODE_ENV === "production") {
   if (String(process.env.JWT_SECRET).length < 32) { console.error("JWT_SECRET must contain at least 32 characters in production."); process.exit(1); }
