@@ -5,11 +5,11 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
-const mongoUri = String(process.env.MONGO_URI || "").trim();
+const mongoUri = String(process.env.MONGODB_URI || process.env.MONGO_URI || "").trim();
 const outputRoot = path.resolve(process.env.BACKUP_DIR || path.join(__dirname, "..", "backups"));
 
 if (!mongoUri) {
-  console.error("MONGO_URI must be configured before creating a backup.");
+  console.error("MONGODB_URI (or MONGO_URI) must be configured before creating a backup.");
   process.exit(1);
 }
 
