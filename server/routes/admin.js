@@ -9,8 +9,9 @@ const Announcement = require("../models/Announcement");
 const Gallery = require("../models/Gallery");
 const auth = require("../middleware/auth");
 const admin = require("../middleware/adminMiddleware");
+const { authLimiter } = require("../middleware/security");
 
-router.post("/login", controller.login);
+router.post("/login", authLimiter, controller.login);
 router.get("/dashboard", auth, admin, controller.dashboard);
 router.get("/unlinked-pupils", auth, admin, unlinkedPupilsController.getUnlinkedPupils);
 router.get("/users", auth, admin, controller.getUsers);
@@ -57,7 +58,7 @@ router.post("/gallery", auth, admin, async (req, res) => {
     const type = mediaType === "video" ? "video" : "image";
 
     if (!title?.trim()) return res.status(400).json({ message: "A media title is required." });
-    if (type === "image" && !consentConfirmed) return res.status(400).json({ message: "Confirm that you have permission to publish this school media before publishing it." });
+    if (!consentConfirmed) return res.status(400).json({ message: "Confirm that you have permission to publish this school media before publishing it." });
     if (!mediaUrl) return res.status(400).json({ message: "A media URL is required." });
     if (mediaUrl.startsWith("data:")) return res.status(400).json({ message: "Direct base64 media is no longer accepted. Upload the file to cloud storage or provide a hosted URL." });
     if (mediaUrl.length > 2000000) return res.status(400).json({ message: "Media URL is too large. Upload the file to cloud storage instead." });
