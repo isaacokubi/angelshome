@@ -2,13 +2,15 @@ const express = require("express");
 const Contact = require("../models/Contact");
 const auth = require("../middleware/auth");
 const admin = require("../middleware/adminMiddleware");
+const validator = require("validator");
+const { publicWriteLimiter } = require("../middleware/security");
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/", publicWriteLimiter, async (req, res) => {
   try {
     const { name, email, phone, message } = req.body || {};
-    if (!name?.trim() || !email?.trim() || !message?.trim()) {
+    if (!name?.trim() || !validator.isEmail(String(email).trim()) || !message?.trim() || name.trim().length > 120 || message.trim().length > 5000) {
       return res.status(400).json({ success: false, message: "Name, email and message are required" });
     }
 
