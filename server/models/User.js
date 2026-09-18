@@ -15,6 +15,7 @@ const userSchema = new mongoose.Schema({
   requestedClassId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolClass", default: null },
   classStatus: { type: String, enum: ["none", "pending", "confirmed", "rejected"], default: "none", index: true },
   isActive: { type: Boolean, default: true, index: true },
+  signatureUrl: { type: String, trim: true, default: "", maxlength: 2000 },
 }, { timestamps: true });
 
 userSchema.methods.verifyPassword = function verifyPassword(password) { return bcrypt.compare(password, this.passwordHash); };
