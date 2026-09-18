@@ -24,7 +24,7 @@ function uploadToCloudinary(file, config, onProgress) {
     xhr.onabort = () => reject(new Error("The media upload was cancelled."));
     xhr.onload = () => {
       let payload = {};
-      try { payload = JSON.parse(xhr.responseText || "{}"); } catch { payload = {}; }
+      try { payload = JSON.parse(xhr.responseText || "{}"); } catch { /* ignore malformed cloud response */ }
       if (xhr.status >= 200 && xhr.status < 300 && payload.secure_url) return resolve(payload);
       reject(new Error(payload.error?.message || `Cloud media upload failed (HTTP ${xhr.status}).`));
     };
