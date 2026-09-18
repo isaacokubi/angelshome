@@ -119,10 +119,13 @@ router.post("/results/bulk", requireSchoolAuth, adminOrTeacher, async (req, res,
   try {
     const { exam, results } = req.body || {};
     if (!id(exam) || !Array.isArray(results) || !results.length) return res.status(400).json({ success: false, message: "Exam and result records are required" });
-    const operations = results.filter((r) => id(r.pupil) && id(r.subject) && Number.isFinite(Number(r.marks))).map((r) => {
-      const marks = Number(r.marks); const maxMarks = Number(r.maxMarks) || 100; const percentage = (marks / maxMarks) * 100;
-      const grade = percentage >= 80 ? "A" : percentage >= 70 ? "B" : percentage >= 60 ? "C" : percentage >= 50 ? "D" : percentage >= 40 ? "E" : "F";
-      return { updateOne: { filter: { exam, pupil: r.pupil, subject: r.subject }, update: { $set: { marks, maxMarks, grade, teacherComment: r.teacherComment || "", enteredBy: req.schoolUser._id } }, upsert: true } };
+    const operations = results.filter((r) => id(r.pupil) && id(r.subject) && (r.assessmentStatus === "missed" || Number.isFinite(Number(r.marks)))).map((r) => {
+      const missed = r.assessmentStatus === "missed" || r.marks === null || r.marks === "";
+      const marks = missed ? null : Number(r.marks); const maxMarks = Number(r.maxMarks) || 100;
+      const percentage = missed ? null : (marks / maxMarks) * 100;
+      const grade = missed ? "" : percentage >= 80 ? "A" : percentage >= 70 ? "B" : percentage >= 60 ? "C" : percentage >= 50 ? "D" : percentage >= 40 ? "E" : "F";
+      const achievement = missed ? { level: "", points: null } : percentage >= 90 ? { level: "EE1", points: 8 } : percentage >= 75 ? { level: "EE2", points: 7 } : percentage >= 58 ? { level: "ME1", points: 6 } : percentage >= 41 ? { level: "ME2", points: 5 } : percentage >= 31 ? { level: "AE1", points: 4 } : percentage >= 21 ? { level: "AE2", points: 3 } : percentage >= 11 ? { level: "BE1", points: 2 } : { level: "BE2", points: 1 };
+      return { updateOne: { filter: { exam, pupil: r.pupil, subject: r.subject }, update: { $set: { marks, maxMarks, grade, assessmentStatus: missed ? "missed" : "recorded", achievementLevel: achievement.level, achievementPoints: achievement.points, teacherComment: r.teacherComment || "", enteredBy: req.schoolUser._id } }, upsert: true } };
     });
     const result = await ExamResult.bulkWrite(operations);
     return res.json({ success: true, matched: result.matchedCount, upserted: result.upsertedCount, modified: result.modifiedCount });
