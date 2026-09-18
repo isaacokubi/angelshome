@@ -10,6 +10,10 @@ const schema = new mongoose.Schema(
     caption: { type: String, default: "", trim: true, maxlength: 500 },
     isPublished: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
+    consentConfirmed: { type: Boolean, default: false },
+    consentNote: { type: String, default: "", trim: true, maxlength: 500 },
+    consentRecordedAt: { type: Date, default: null },
+    consentRecordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     uploadedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
