@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 const cards = [
   ["Staff", "Manage teachers and administration profiles.", "/admin/cms/staff"],
   ["Hero Slides", "Control homepage banners and visual storytelling.", "/admin/cms/hero"],
-  ["Gallery", "Manage school activity photos.", "/admin/cms/gallery"],
+  ["Gallery", "Manage homepage photos and videos.", "/admin/cms/gallery"],
   ["Events", "Manage academic calendar and events.", "/admin/cms/events"],
   ["Fees", "Update fee structure and published fee information.", "/admin/cms/fees"],
 ];
