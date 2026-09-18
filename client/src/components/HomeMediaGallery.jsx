@@ -15,8 +15,19 @@ export default function HomeMediaGallery() {
   useEffect(() => {
     let active = true;
     apiRequest("/cms/gallery")
-      .then((data) => { if (active) setItems(Array.isArray(data) && data.length ? data : fallbackItems); })
-      .catch(() => { if (active) setItems(fallbackItems); });
+      .then((data) => {
+        if (!active) return;
+        const serverItems = Array.isArray(data)
+          ? data.filter((item) => {
+              const url = item?.url || item?.image || "";
+              return url && url !== "/images/slide1.jpg" && url !== "/images/secondary.jpg";
+            })
+          : [];
+        setItems(serverItems.length ? serverItems : fallbackItems);
+      })
+      .catch(() => {
+        if (active) setItems(fallbackItems);
+      });
     return () => { active = false; };
   }, []);
 
@@ -47,7 +58,7 @@ export default function HomeMediaGallery() {
                     {item.mediaType === "video" ? (
                       <video className="h-full w-full object-cover" muted playsInline preload="metadata" src={item.url} />
                     ) : (
-                      <img src={item.url || item.image} alt={item.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                      <img src={item.url || item.image || fallbackItems[0].url} alt={item.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                     )}
                     {item.mediaType === "video" && <span className="absolute bottom-3 left-3 rounded-full bg-blue-950/90 px-3 py-1 text-xs font-black text-white">▶ Video</span>}
                   </div>
@@ -75,7 +86,7 @@ export default function HomeMediaGallery() {
             {selected.mediaType === "video" ? (
               <video className="max-h-[75vh] w-full bg-black" controls autoPlay playsInline src={selected.url} />
             ) : (
-              <img src={selected.url || selected.image} alt={selected.title} className="max-h-[75vh] w-full object-contain bg-slate-100" />
+              <img src={selected.url || selected.image || fallbackItems[0].url} alt={selected.title} className="max-h-[75vh] w-full object-contain bg-slate-100" />
             )}
             {selected.caption && <p className="px-5 py-4 text-sm leading-6 text-slate-600">{selected.caption}</p>}
           </div>
