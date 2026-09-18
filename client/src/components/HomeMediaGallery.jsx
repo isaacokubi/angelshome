@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "../services/api";
 
 const fallbackItems = [
-  { _id: "sample-image-1", title: "School life", category: "Campus", mediaType: "image", url: "/images/slide1.jpg", caption: "A glimpse of learning and community life." },
-  { _id: "sample-image-2", title: "Learning spaces", category: "Campus", mediaType: "image", url: "/images/secondary.jpg", caption: "Spaces where learners grow and discover." },
+  { _id: "sample-image-1", title: "School life", category: "Campus", mediaType: "image", url: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1400&q=85", caption: "A glimpse of learning and community life." },
+  { _id: "sample-image-2", title: "Learning spaces", category: "Campus", mediaType: "image", url: "https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?auto=format&fit=crop&w=1400&q=85", caption: "Spaces where learners grow and discover." },
   { _id: "sample-video-1", title: "Sample school video", category: "Video", mediaType: "video", url: "https://mdn.github.io/shared-assets/videos/flower.mp4", caption: "Sample MP4 used to verify homepage video playback." },
 ];
 
