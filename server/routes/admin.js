@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 
 const controller = require("../controllers/adminController");
@@ -18,6 +19,28 @@ router.delete("/announcement/:id", auth, admin, controller.deleteAnnouncement);
 router.get("/settings", auth, admin, settingsController.getAdminSettings);
 router.put("/settings", auth, admin, settingsController.updateSettings);
 
+router.post("/gallery/upload-signature", auth, admin, async (req, res) => {
+  try {
+    const cloudName = String(process.env.CLOUDINARY_CLOUD_NAME || "").trim();
+    const apiKey = String(process.env.CLOUDINARY_API_KEY || "").trim();
+    const apiSecret = String(process.env.CLOUDINARY_API_SECRET || "").trim();
+    if (!cloudName || !apiKey || !apiSecret) {
+      return res.status(503).json({ message: "Large media uploads are not configured. Add the Cloudinary storage environment variables to the API." });
+    }
+
+    const mediaType = req.body?.mediaType === "video" ? "video" : "image";
+    const timestamp = Math.floor(Date.now() / 1000);
+    const folder = "angels-home/gallery";
+    const stringToSign = `folder=${folder}&timestamp=${timestamp}`;
+    const signature = crypto.createHash("sha1").update(stringToSign + apiSecret).digest("hex");
+
+    return res.json({ cloudName, apiKey, timestamp, signature, folder, mediaType, maxVideoBytes: 100 * 1024 * 1024, maxImageBytes: 10 * 1024 * 1024 });
+  } catch (error) {
+    console.error("Gallery upload signature error:", error);
+    return res.status(500).json({ message: "Unable to prepare media upload" });
+  }
+});
+
 router.get("/gallery", auth, admin, async (req, res) => {
   try {
     return res.json(await Gallery.find().sort({ sortOrder: -1, uploadedAt: -1 }).lean());
@@ -35,7 +58,8 @@ router.post("/gallery", auth, admin, async (req, res) => {
 
     if (!title?.trim()) return res.status(400).json({ message: "A media title is required." });
     if (!mediaUrl) return res.status(400).json({ message: "A media URL is required." });
-    if (mediaUrl.length > 12000000) return res.status(400).json({ message: "Media data is too large. Use a hosted media URL for large files." });
+    if (mediaUrl.startsWith("data:")) return res.status(400).json({ message: "Direct base64 media is no longer accepted. Upload the file to cloud storage or provide a hosted URL." });
+    if (mediaUrl.length > 2000000) return res.status(400).json({ message: "Media URL is too large. Upload the file to cloud storage instead." });
 
     const item = await Gallery.create({
       title: title.trim(),
