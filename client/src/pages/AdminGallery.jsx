@@ -3,7 +3,7 @@ import { apiRequest } from "../services/api";
 
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const initialForm = { title: "", category: "Campus", mediaType: "image", url: "", caption: "", isPublished: true, sortOrder: 0 };
+const initialForm = { title: "", category: "Campus", mediaType: "image", url: "", caption: "", isPublished: true, sortOrder: 0, consentConfirmed: false, consentNote: "" };
 
 function uploadToCloudinary(file, config, onProgress) {
   return new Promise((resolve, reject) => {
@@ -104,6 +104,7 @@ export default function AdminGallery() {
       }
 
       if (!mediaUrl) throw new Error("Select a media file or provide a hosted media URL.");
+      if (form.mediaType === "image" && !form.consentConfirmed) throw new Error("Confirm that you have permission to publish this school media.");
       await apiRequest("/admin/gallery", {
         method: "POST",
         body: JSON.stringify({ ...form, url: mediaUrl, image: form.mediaType === "image" ? mediaUrl : "" }),
@@ -161,6 +162,8 @@ export default function AdminGallery() {
           <textarea value={form.caption} onChange={(e) => setForm({ ...form, caption: e.target.value })} className="mt-2 min-h-24 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Short description shown with the media." />
         </label>
         <label className="flex items-center gap-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={form.isPublished} onChange={(e) => setForm({ ...form, isPublished: e.target.checked })} /> Publish on homepage</label>
+        <label className="flex items-center gap-3 text-sm font-bold text-slate-700 md:col-span-2"><input type="checkbox" checked={form.consentConfirmed} onChange={(e) => setForm({ ...form, consentConfirmed: e.target.checked })} /> I confirm the school has permission/appropriate consent to publish this media.</label>
+        <label className="text-sm font-bold text-slate-700 md:col-span-2">Consent / source note (optional)<textarea value={form.consentNote} onChange={(e) => setForm({ ...form, consentNote: e.target.value })} className="mt-2 min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="For example: parent/guardian consent recorded by the school on 18/09/2026." /></label>
       </div>
       {message && <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">{message}</p>}
       <button disabled={saving} className="mt-5 rounded-xl bg-blue-950 px-6 py-3 font-black text-white disabled:opacity-50">{saving ? (uploadProgress > 0 && uploadProgress < 100 ? `Uploading ${uploadProgress}%…` : "Publishing…") : "Publish media"}</button>
