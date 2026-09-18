@@ -1,0 +1,4 @@
+const express=require("express");const {checkLessonReminders}=require("../services/lessonReminderScheduler");
+const router=express.Router();
+router.get("/queue",async(req,res,next)=>{try{const secret=String(process.env.CRON_SECRET||"").trim();const auth=String(req.get("authorization")||"");const provided=auth.startsWith("Bearer ")?auth.slice(7).trim():String(req.get("x-cron-secret")||"").trim();if(!secret||!provided||provided.length!==secret.length||!require("crypto").timingSafeEqual(Buffer.from(provided),Buffer.from(secret)))return res.status(401).json({success:false,message:"Unauthorized."});await checkLessonReminders();return res.json({success:true,status:"processed",processedAt:new Date().toISOString()});}catch(e){next(e)}});
+module.exports=router;
