@@ -7,6 +7,7 @@ const SchoolClass=require("../models/SchoolClass");
 const {requireSchoolAuth,requireSchoolRole}=require("../middleware/schoolAuth");
 const {publicWriteLimiter,authLimiter}=require("../middleware/security");
 const crypto=require("crypto");
+const hashToken=(token)=>crypto.createHash("sha256").update(String(token)).digest("hex");
 const router=express.Router();
 router.post("/",publicWriteLimiter,async(req,res,next)=>{try{
  const b=req.body||{}; const phone=String(b.parentPhone||"").trim().replace(/^0+/,"+254");
@@ -34,7 +35,33 @@ router.patch("/:id/status",requireSchoolAuth,requireSchoolRole("admin"),authLimi
    await PupilProfile.create({pupil:pupil._id,admissionNumber:admission,dateOfBirth:row.dateOfBirth,schoolClass:schoolClass?schoolClass._id:null,status:"active"});
    row.enrolledPupil=pupil._id;
  }
- row.status=status;row.reviewedBy=req.schoolUser._id;row.reviewedAt=new Date();await row.save();
- res.json({success:true,application:row.toObject(),message:status==="approved"?"Application approved and learner account created. Reset the learner credentials before portal access.":"Admission status updated."});
+ row.status=status;row.reviewedBy=req.schoolUser._id;row.reviewedAt=new Date();
+ let setupToken="";
+ if(status==="approved"&&row.enrolledPupil){
+   setupToken=crypto.randomBytes(32).toString("hex");
+   row.setupTokenHash=hashToken(setupToken);
+   row.setupTokenExpiresAt=new Date(Date.now()+24*60*60*1000);
+ }
+ await row.save();
+ res.json({success:true,application:row.toObject(),learnerSetup:setupToken?{email:emailForPupil(row.enrolledPupil),token:setupToken,expiresAt:row.setupTokenExpiresAt}:null,message:status==="approved"?"Application approved. A one-time learner account setup token has been generated for secure password creation.":"Admission status updated."});
+}catch(e){next(e)}});
+function emailForPupil(pupilId){return "pupil-"+String(pupilId).slice(-8)+"@angels-home.local";}
+router.post("/:id/setup-token",requireSchoolAuth,requireSchoolRole("admin"),authLimiter,async(req,res,next)=>{try{
+ const row=await AdmissionApplication.findById(req.params.id).select("+setupTokenHash");
+ if(!row||row.status!=="approved"||!row.enrolledPupil)return res.status(404).json({success:false,message:"Approved learner account not found."});
+ const token=crypto.randomBytes(32).toString("hex");row.setupTokenHash=hashToken(token);row.setupTokenExpiresAt=new Date(Date.now()+24*60*60*1000);await row.save();
+ const learner=await User.findById(row.enrolledPupil).select("email name").lean();
+ return res.json({success:true,learnerSetup:{email:learner?.email||emailForPupil(row.enrolledPupil),token,expiresAt:row.setupTokenExpiresAt}});
+}catch(e){next(e)}});
+router.post("/setup/:token",authLimiter,async(req,res,next)=>{try{
+ const token=String(req.params.token||"");const password=String(req.body?.password||"");
+ if(!/^[a-f0-9]{64}$/i.test(token)||password.length<8)return res.status(400).json({success:false,message:"A valid setup token and password of at least 8 characters are required."});
+ const row=await AdmissionApplication.findOne({setupTokenHash:hashToken(token),setupTokenExpiresAt:{$gt:new Date()},status:"approved"}).select("+setupTokenHash");
+ if(!row||!row.enrolledPupil)return res.status(400).json({success:false,message:"This learner setup token is invalid or expired."});
+ const learner=await User.findOne({_id:row.enrolledPupil,role:"pupil",isActive:true}).select("+passwordHash");
+ if(!learner)return res.status(404).json({success:false,message:"Learner account not found."});
+ learner.passwordHash=await User.hashPassword(password);await learner.save();
+ row.setupTokenHash="";row.setupTokenExpiresAt=null;await row.save();
+ return res.json({success:true,message:"Learner password created successfully. You can now sign in with the learner email.",email:learner.email});
 }catch(e){next(e)}});
 module.exports=router;
