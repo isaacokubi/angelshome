@@ -1,5 +1,6 @@
 const axios = require("axios");
 const Donation = require("../models/Donation");
+const { paymentLimiter } = require("../middleware/security");
 
 const MPESA_BASE_URL = (process.env.MPESA_BASE_URL || "https://sandbox.safaricom.co.ke").replace(/\/$/, "");
 
@@ -32,7 +33,7 @@ async function getAccessToken() {
   return response.data.access_token;
 }
 
-exports.stkPush = async (req, res) => {
+exports.stkPush = [paymentLimiter, async (req, res) => {
   try {
     requireMpesaConfig();
     const { phone, amount, donorName, email, project } = req.body || {};
@@ -88,7 +89,7 @@ exports.stkPush = async (req, res) => {
     console.error("M-Pesa STK error:", error.response?.data || error.message);
     return res.status(500).json({ success: false, message: "Unable to initiate M-Pesa payment" });
   }
-};
+}];
 
 exports.mpesaCallback = async (req, res) => {
   try {
